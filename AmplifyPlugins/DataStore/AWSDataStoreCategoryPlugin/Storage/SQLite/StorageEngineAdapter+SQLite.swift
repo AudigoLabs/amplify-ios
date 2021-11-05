@@ -12,11 +12,11 @@ import AWSPluginsCore
 
 /// [SQLite](https://sqlite.org) `StorageEngineAdapter` implementation. This class provides
 /// an integration layer between the AppSyncLocal `StorageEngine` and SQLite for local storage.
-final class SQLiteStorageEngineAdapter: StorageEngineAdapter {
+final public class SQLiteStorageEngineAdapter: StorageEngineAdapter {
 
     internal var connection: Connection!
     private var dbFilePath: URL?
-    static let dbVersionKey = "com.amazonaws.DataStore.dbVersion"
+    static public let dbVersionKey = "com.amazonaws.DataStore.dbVersion"
 
     // TODO benchmark whether a SELECT FROM FOO WHERE ID IN (1, 2, 3...) performs measurably
     // better than SELECT FROM FOO WHERE ID = 1 OR ID=2 OR ID=3
@@ -81,7 +81,7 @@ final class SQLiteStorageEngineAdapter: StorageEngineAdapter {
         try connection.execute(databaseInitializationStatement)
     }
 
-    static func getDbFilePath(databaseName: String) -> URL {
+    static public func getDbFilePath(databaseName: String) -> URL {
         guard let documentsPath = getDocumentPath() else {
             preconditionFailure("Could not create the database. The `.documentDirectory` is invalid")
         }

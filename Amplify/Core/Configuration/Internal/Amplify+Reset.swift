@@ -17,7 +17,7 @@ extension Amplify {
     /// - Releases each configured category, and replaces the instances referred to by the static accessor properties
     ///   (e.g., `Amplify.Hub`) with new instances. These instances must subsequently have providers added, and be
     ///   configured prior to use.
-    static func reset() {
+    static public func reset() {
         // Looping through all categories to ensure we don't accidentally forget a category at some point in the future
 
         let group = DispatchGroup()
