@@ -26,7 +26,7 @@ extension SQLStatement {
 extension SQLStatement {
 
     // `modelType` is deprecated, instead modelSchema should be used.
-    var modelType: Model.Type {
+    public var modelType: Model.Type {
         fatalError("""
         DataStoreStatement.modelType is deprecated. SQLStatement is an internal type and there should be \
         no references to modelType. If you encounter this error, please open a GitHub issue. \

@@ -10,16 +10,16 @@ import Foundation
 import SQLite
 
 /// Represents a `insert` SQL statement associated with a `Model` instance.
-struct InsertStatement: SQLStatement {
-    let modelSchema: ModelSchema
-    let variables: [Binding?]
+public struct InsertStatement: SQLStatement {
+    public let modelSchema: ModelSchema
+    public let variables: [Binding?]
 
-    init(model: Model, modelSchema: ModelSchema) {
+    public init(model: Model, modelSchema: ModelSchema) {
         self.modelSchema = modelSchema
         self.variables = model.sqlValues(for: modelSchema.columns, modelSchema: modelSchema)
     }
 
-    var stringValue: String {
+    public var stringValue: String {
         let fields = modelSchema.columns
         let columns = fields.map { $0.columnName() }
         var statement = "insert into \(modelSchema.name) "

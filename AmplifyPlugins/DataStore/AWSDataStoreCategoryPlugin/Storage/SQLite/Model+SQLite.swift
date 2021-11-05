@@ -57,7 +57,7 @@ extension Model {
     ///
     /// - Parameter fields: an optional subset of fields
     /// - Returns: an array of SQLite's `Binding` compatible type
-    internal func sqlValues(for fields: [ModelField]? = nil, modelSchema: ModelSchema) -> [Binding?] {
+    public func sqlValues(for fields: [ModelField]? = nil, modelSchema: ModelSchema) -> [Binding?] {
         let modelFields = fields ?? modelSchema.sortedFields
         let values: [Binding?] = modelFields.map { field in
 
