@@ -7,10 +7,10 @@
 #
 
 # Version definitions
-$AMPLIFY_VERSION = '1.15.5'
+$AMPLIFY_VERSION = '1.19.2'
 $AMPLIFY_RELEASE_TAG = "v#{$AMPLIFY_VERSION}"
 
-$AWS_SDK_VERSION = '2.26.1'
+$AWS_SDK_VERSION = '2.27.0'
 $OPTIMISTIC_AWS_SDK_VERSION = "~> #{$AWS_SDK_VERSION}"
 
 Pod::Spec.new do |s|
@@ -31,6 +31,13 @@ Pod::Spec.new do |s|
   s.source_files = 'AmplifyTestCommon/**/*.swift'
 
   s.dependency 'Amplify', $AMPLIFY_VERSION
+  s.dependency 'CwlPreconditionTesting', "~> 2.0"
+
+  s.pod_target_xcconfig = { 
+    'ALWAYS_EMBED_SWIFT_STANDARD_LIBRARIES' => 'YES',
+    'ENABLE_TESTING_SEARCH_PATHS' => 'YES',
+    'SYSTEM_FRAMEWORK_SEARCH_PATHS' => '$(CORRESPONDING_DEVICE_PLATFORM_DIR)/Developer/Library/Frameworks $(inherited)'
+  }
 
   s.script_phases = [
     { 
