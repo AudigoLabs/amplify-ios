@@ -49,7 +49,8 @@ class AWSGraphQLSubscriptionOperationCancelTests: XCTestCase {
             let dependencies = AWSAPIPlugin.ConfigurationDependencies(
                 pluginConfig: pluginConfig,
                 authService: authService,
-                subscriptionConnectionFactory: subscriptionConnectionFactory
+                subscriptionConnectionFactory: subscriptionConnectionFactory,
+                logLevel: .error
             )
             apiPlugin.configure(using: dependencies)
         } catch {
@@ -169,8 +170,13 @@ class AWSGraphQLSubscriptionOperationCancelTests: XCTestCase {
         let connectionCreation = expectation(description: "connection factory called")
         let mockSubscriptionConnectionFactory = MockSubscriptionConnectionFactory(onGetOrCreateConnection: { _, _, _, _ in
             connectionCreation.fulfill()
-            sleep(5)
-            throw APIError.invalidConfiguration("something went wrong", "", nil)
+            return MockSubscriptionConnection(onSubscribe: { (_, _, eventHandler) -> SubscriptionItem in
+                let item = SubscriptionItem(requestString: "", variables: nil, eventHandler: { _, _ in
+                })
+                eventHandler(.connection(.connecting), item)
+                return item
+            }, onUnsubscribe: {_ in
+            })
         })
 
         setUp(subscriptionConnectionFactory: mockSubscriptionConnectionFactory)
@@ -183,7 +189,7 @@ class AWSGraphQLSubscriptionOperationCancelTests: XCTestCase {
         let receivedFailure = expectation(description: "Received failure")
         receivedFailure.isInverted = true
         let receivedValue = expectation(description: "Received value for connecting")
-        receivedValue.isInverted = true
+        receivedValue.assertForOverFulfill = false
 
         let valueListener: GraphQLSubscriptionOperation<JSONValue>.InProcessListener = { _ in
             receivedValue.fulfill()
