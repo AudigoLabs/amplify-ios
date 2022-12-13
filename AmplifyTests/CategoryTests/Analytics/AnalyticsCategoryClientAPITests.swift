@@ -14,8 +14,8 @@ class AnalyticsCategoryClientAPITests: XCTestCase {
     var analytics: AnalyticsCategory!
     var plugin: MockAnalyticsCategoryPlugin!
 
-    override func setUp() {
-        Amplify.reset()
+    override func setUp() async throws {
+        await Amplify.reset()
         plugin = MockAnalyticsCategoryPlugin()
         analytics = Amplify.Analytics
         let categoryConfiguration = AnalyticsCategoryConfiguration(
@@ -43,7 +43,7 @@ class AnalyticsCategoryClientAPITests: XCTestCase {
             }
         }
 
-        analytics.identifyUser("test")
+        analytics.identifyUser(userId: "test")
         waitForExpectations(timeout: 1.0)
     }
 
@@ -105,6 +105,19 @@ class AnalyticsCategoryClientAPITests: XCTestCase {
             }
         }
         analytics.unregisterGlobalProperties("one", "two")
+        waitForExpectations(timeout: 1.0)
+    }
+    
+    func testUnregisterGlobalPropertiesWithArrayParameter() throws {
+        let expectedMessage = "unregisterGlobalProperties(_:)"
+        let methodInvoked = expectation(description: "Expected method was invoked on plugin")
+        plugin.listeners.append { message in
+            if message == expectedMessage {
+                methodInvoked.fulfill()
+            }
+        }
+        let properties: [String] = ["one", "two"]
+        analytics.unregisterGlobalProperties(properties)
         waitForExpectations(timeout: 1.0)
     }
 

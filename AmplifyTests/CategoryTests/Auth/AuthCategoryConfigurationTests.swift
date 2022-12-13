@@ -12,8 +12,8 @@ import XCTest
 
 class AuthCategoryConfigurationTests: XCTestCase {
 
-    override func setUp() {
-        Amplify.reset()
+    override func setUp() async throws {
+        await Amplify.reset()
     }
 
     /// Test if we can add a new auth plugin
@@ -57,11 +57,11 @@ class AuthCategoryConfigurationTests: XCTestCase {
     ///
     /// - Given: Amplify framework configured with Auth plugin
     /// - When:
-    ///    - I call Amplify.reset()
+    ///    - I call await Amplify.reset()
     /// - Then:
     ///    - The plugin should invoke the reset method.
     ///
-    func testCanResetCategory() throws {
+    func testCanResetCategory() async throws {
         let plugin = MockAuthCategoryPlugin()
         let resetWasInvoked = expectation(description: "reset() was invoked")
         plugin.listeners.append { message in
@@ -78,8 +78,8 @@ class AuthCategoryConfigurationTests: XCTestCase {
         let amplifyConfig = AmplifyConfiguration(auth: config)
 
         try Amplify.configure(amplifyConfig)
-        Amplify.reset()
-        waitForExpectations(timeout: 1.0)
+        await Amplify.reset()
+        await waitForExpectations(timeout: 1.0)
     }
 
     /// Test whether calling reset removes the plugin added
@@ -90,7 +90,7 @@ class AuthCategoryConfigurationTests: XCTestCase {
     /// - Then:
     ///    - Auth plugin should no longer work
     ///
-    func testResetRemovesAddedPlugin() throws {
+    func testResetRemovesAddedPlugin() async throws {
         let plugin = MockAuthCategoryPlugin()
         try Amplify.add(plugin: plugin)
 
@@ -101,7 +101,7 @@ class AuthCategoryConfigurationTests: XCTestCase {
         let amplifyConfig = AmplifyConfiguration(auth: config)
 
         try Amplify.configure(amplifyConfig)
-        Amplify.reset()
+        await Amplify.reset()
         XCTAssertThrowsError(try Amplify.Auth.getPlugin(for: "MockAuthCategoryPlugin"),
                              "Getting a plugin after reset() should throw") { error in
                                 guard case AuthError.configuration = error else {
@@ -149,14 +149,8 @@ class AuthCategoryConfigurationTests: XCTestCase {
     /// - Then:
     ///    - API should complete without error
     ///
-    func testCanUseDefaultPluginIfOnlyOnePlugin() throws {
+    func testCanUseDefaultPluginIfOnlyOnePlugin() async throws {
         let plugin = MockAuthCategoryPlugin()
-        let methodInvokedOnDefaultPlugin = expectation(description: "test method invoked on default plugin")
-        plugin.listeners.append { message in
-            if message == "changePassword" {
-                methodInvokedOnDefaultPlugin.fulfill()
-            }
-        }
         try Amplify.add(plugin: plugin)
 
         let config = AuthCategoryConfiguration(plugins: ["MockAuthCategoryPlugin": true])
@@ -164,8 +158,7 @@ class AuthCategoryConfigurationTests: XCTestCase {
 
         try Amplify.configure(amplifyConfig)
 
-        _ = Amplify.Auth.update(oldPassword: "current", to: "new", listener: nil)
-        waitForExpectations(timeout: 1.0)
+        _ = try await Amplify.Auth.update(oldPassword: "current", to: "new")
     }
 
     /// Test if I can pick a specific plugin
@@ -176,7 +169,7 @@ class AuthCategoryConfigurationTests: XCTestCase {
     /// - Then:
     ///    - API should complete without error for one plugin
     ///
-    func testCanUseSpecifiedPlugin() throws {
+    func testCanUseSpecifiedPlugin() async throws {
         let defaultPlugin = MockAuthCategoryPlugin()
         defaultPlugin.listeners.append { message in
             if message == "changePassword" {
@@ -205,9 +198,9 @@ class AuthCategoryConfigurationTests: XCTestCase {
         let amplifyConfig = AmplifyConfiguration(auth: config)
 
         try Amplify.configure(amplifyConfig)
-        _ = try Amplify.Auth.getPlugin(for: "MockSecondAuthCategoryPlugin")
-            .update(oldPassword: "current", to: "new", options: nil, listener: nil)
-        waitForExpectations(timeout: 1.0)
+        _ = try await Amplify.Auth.getPlugin(for: "MockSecondAuthCategoryPlugin")
+            .update(oldPassword: "current", to: "new", options: nil)
+        await waitForExpectations(timeout: 1.0)
     }
 
     /// Test if we get error when trying default plugin when multiple plugin added.
@@ -218,7 +211,7 @@ class AuthCategoryConfigurationTests: XCTestCase {
     /// - Then:
     ///    - Should throw an exception
     ///
-    func testPreconditionFailureInvokingWithMultiplePlugins() throws {
+    func testPreconditionFailureInvokingWithMultiplePlugins() async throws {
         let plugin1 = MockAuthCategoryPlugin()
         try Amplify.add(plugin: plugin1)
 
@@ -236,9 +229,13 @@ class AuthCategoryConfigurationTests: XCTestCase {
 
         try Amplify.configure(amplifyConfig)
 
-        try XCTAssertThrowFatalError {
-            _ = Amplify.Auth.update(oldPassword: "current", to: "new", listener: nil)
+        let registry = TypeRegistry.register(type: AuthCategoryPlugin.self) { _ in
+            MockAuthCategoryPlugin()
         }
+
+        _ = try await Amplify.Auth.update(oldPassword: "current", to: "new")
+
+        XCTAssertGreaterThan(registry.messages.count, 0)
     }
 
     /// Test if configuration Auth plugin with getPlugin() works
@@ -288,14 +285,18 @@ class AuthCategoryConfigurationTests: XCTestCase {
     /// - Then:
     ///    - I should get an exception
     ///
-    func testPreconditionFailureInvokingBeforeConfig() throws {
+    func testPreconditionFailureInvokingBeforeConfig() async throws {
         let plugin = MockAuthCategoryPlugin()
         try Amplify.add(plugin: plugin)
 
-        // Remember, this test must be invoked with a category that doesn't include an Amplify-supplied default plugin
-        try XCTAssertThrowFatalError {
-            _ = Amplify.Auth.update(oldPassword: "current", to: "new", listener: nil)
+        let registry = TypeRegistry.register(type: AuthCategoryPlugin.self) { _ in
+            MockAuthCategoryPlugin()
         }
+
+        // Remember, this test must be invoked with a category that doesn't include an Amplify-supplied default plugin
+        _ = try await Amplify.Auth.update(oldPassword: "current", to: "new")
+
+        XCTAssertGreaterThan(registry.messages.count, 0)
     }
 
     // MARK: - Test internal config behavior guarantees
@@ -334,7 +335,7 @@ class AuthCategoryConfigurationTests: XCTestCase {
     /// - Then:
     ///    - Should not throw any error
     ///
-    func testCanConfigureAfterReset() throws {
+    func testCanConfigureAfterReset() async throws {
         let plugin = MockAuthCategoryPlugin()
         try Amplify.add(plugin: plugin)
         let config = AuthCategoryConfiguration(
@@ -343,17 +344,17 @@ class AuthCategoryConfigurationTests: XCTestCase {
 
         XCTAssertNoThrow(try Amplify.Auth.configure(using: config))
 
-        let exp = expectation(description: #function)
-        Amplify.Auth.reset {
-            exp.fulfill()
-        }
-        wait(for: [exp], timeout: 1.0)
+        await Amplify.Auth.reset()
 
         XCTAssertNoThrow(try Amplify.Auth.configure(using: config))
 
-        try XCTAssertNoThrowFatalError {
-            _ = Amplify.Auth.update(oldPassword: "current", to: "new", listener: nil)
+        let registry = TypeRegistry.register(type: AuthCategoryPlugin.self) { _ in
+            MockAuthCategoryPlugin()
         }
+
+        _ = try await Amplify.Auth.update(oldPassword: "current", to: "new")
+
+        XCTAssertEqual(registry.messages.count, 0)
     }
 
     /// Test that Amplify logs a warning if it encounters a plugin configuration key without a corresponding plugin

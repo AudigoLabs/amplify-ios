@@ -88,25 +88,38 @@ import Foundation
 ///   directly by host applications. The behavior of this may change without warning.
 public enum ModelAssociation {
     case hasMany(associatedFieldName: String?)
-    case hasOne(associatedFieldName: String?, targetName: String? = nil)
-    case belongsTo(associatedFieldName: String?, targetName: String?)
+    case hasOne(associatedFieldName: String?, targetNames: [String])
+    case belongsTo(associatedFieldName: String?, targetNames: [String])
 
-    public static let belongsTo: ModelAssociation = .belongsTo(associatedFieldName: nil, targetName: nil)
+    public static let belongsTo: ModelAssociation = .belongsTo(associatedFieldName: nil, targetNames: [])
 
     public static func belongsTo(targetName: String? = nil) -> ModelAssociation {
-        return .belongsTo(associatedFieldName: nil, targetName: nil)
+        let targetNames = targetName.map { [$0] } ?? []
+        return .belongsTo(associatedFieldName: nil, targetNames: targetNames)
     }
 
     public static func hasMany(associatedWith: CodingKey?) -> ModelAssociation {
         return .hasMany(associatedFieldName: associatedWith?.stringValue)
     }
 
+    @available(*, deprecated, message: "Use hasOne(associatedWith:targetNames:)")
     public static func hasOne(associatedWith: CodingKey?, targetName: String? = nil) -> ModelAssociation {
-        return .hasOne(associatedFieldName: associatedWith?.stringValue, targetName: targetName)
+        let targetNames = targetName.map { [$0] } ?? []
+        return .hasOne(associatedWith: associatedWith, targetNames: targetNames)
     }
 
+    public static func hasOne(associatedWith: CodingKey?, targetNames: [String] = []) -> ModelAssociation {
+        return .hasOne(associatedFieldName: associatedWith?.stringValue, targetNames: targetNames)
+    }
+
+    @available(*, deprecated, message: "Use belongsTo(associatedWith:targetNames:)")
     public static func belongsTo(associatedWith: CodingKey?, targetName: String?) -> ModelAssociation {
-        return .belongsTo(associatedFieldName: associatedWith?.stringValue, targetName: targetName)
+        let targetNames = targetName.map { [$0] } ?? []
+        return .belongsTo(associatedFieldName: associatedWith?.stringValue, targetNames: targetNames)
+    }
+
+    public static func belongsTo(associatedWith: CodingKey?, targetNames: [String] = []) -> ModelAssociation {
+        return .belongsTo(associatedFieldName: associatedWith?.stringValue, targetNames: targetNames)
     }
 
 }
@@ -173,7 +186,7 @@ extension ModelField {
         """)
     public var requiredAssociatedModel: Model.Type {
         guard let modelType = associatedModel else {
-            preconditionFailure("""
+            return Fatal.preconditionFailure("""
             Model fields that are foreign keys must be connected to another Model.
             Check the `ModelSchema` section of your "\(name)+Schema.swift" file.
             """)
@@ -194,7 +207,7 @@ extension ModelField {
     ///   breaking change.
     public var requiredAssociatedModelName: ModelName {
         guard let modelName = associatedModelName else {
-            preconditionFailure("""
+            return Fatal.preconditionFailure("""
             Model fields that are foreign keys must be connected to another Model.
             Check the `ModelSchema` section of your "\(name)+Schema.swift" file.
             """)

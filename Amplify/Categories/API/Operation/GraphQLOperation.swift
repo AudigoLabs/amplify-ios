@@ -12,11 +12,10 @@ open class GraphQLOperation<R: Decodable>: AmplifyOperation<
     APIError
 > { }
 
-
 /// GraphQL Subscription Operation
 open class GraphQLSubscriptionOperation<R: Decodable>: AmplifyInProcessReportingOperation<
     GraphQLOperationRequest<R>,
-    SubscriptionEvent<GraphQLResponse<R>>,
+    GraphQLSubscriptionEvent<R>,
     Void,
     APIError
 > { }
@@ -31,3 +30,9 @@ public extension HubPayload.EventName.API {
     /// eventName for HubPayloads emitted by this operation
     static let subscribe = "API.subscribe"
 }
+
+public extension GraphQLOperation {
+    typealias TaskAdapter = AmplifyOperationTaskAdapter<Request, Success, Failure>
+}
+
+public typealias GraphQLTask<R: Decodable> = GraphQLOperation<R>.TaskAdapter

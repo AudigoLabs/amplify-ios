@@ -5,7 +5,8 @@
 // SPDX-License-Identifier: Apache-2.0
 //
 
-import AWSCore
+import ClientRuntime
+import AWSClientRuntime
 import Amplify
 import AWSPluginsCore
 
@@ -24,33 +25,25 @@ public class MockAWSAuthService: AWSAuthServiceBehavior {
     public func reset() {
     }
 
-    public func getCredentialsProvider() -> AWSCredentialsProvider {
-        let cognitoCredentialsProvider = AWSCognitoCredentialsProvider()
+    public func getCredentialsProvider() -> CredentialsProvider {
+        let cognitoCredentialsProvider = MyCustomCredentialsProvider()
         return cognitoCredentialsProvider
     }
 
-    public func getIdentityId() -> Result<String, AuthError> {
+    public func getIdentityID() async throws -> String {
         if let error = getIdentityIdError {
-            return .failure(error)
+            throw error
         }
 
-        return .success(identityId ?? "IdentityId")
+        return identityId ?? "IdentityId"
     }
-
-    public func getIdentityID(completion: @escaping (Result<String, AuthError>) -> Void) {
-        if let error = getIdentityIdError {
-            completion(.failure(error))
-        }
-
-        completion(.success(identityId ?? "IdentityId"))
-    }
-
-    public func getToken() -> Result<String, AuthError> {
+    
+    public func getUserPoolAccessToken() async throws -> String {
         if let error = getTokenError {
-            return .failure(error)
+            throw error
+        } else {
+            return token ?? "token"
         }
-
-        return .success(token ?? "token")
     }
 
     public func getTokenClaims(tokenString: String) -> Result<[String: AnyObject], AuthError> {
@@ -58,5 +51,23 @@ public class MockAWSAuthService: AWSAuthServiceBehavior {
             return .failure(error)
         }
         return .success(tokenClaims ?? ["": "" as AnyObject])
+    }
+}
+
+struct MyCustomCredentialsProvider: CredentialsProvider {
+    func getCredentials() async throws -> AWSClientRuntime.AWSCredentials {
+        AWSCredentials(
+            accessKey: "AKIDEXAMPLE",
+            secret: "wJalrXUtnFEMI/K7MDENG+bPxRfiCYEXAMPLEKEY",
+            expirationTimeout: 30)
+    }
+
+    func getCredentials() throws -> SdkFuture<AWSClientRuntime.AWSCredentials> {
+        let future = SdkFuture<AWSClientRuntime.AWSCredentials>()
+        future.fulfill(AWSCredentials(
+            accessKey: "AKIDEXAMPLE",
+            secret: "wJalrXUtnFEMI/K7MDENG+bPxRfiCYEXAMPLEKEY",
+            expirationTimeout: 30))
+        return future
     }
 }

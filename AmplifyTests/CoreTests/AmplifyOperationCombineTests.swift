@@ -5,13 +5,13 @@
 // SPDX-License-Identifier: Apache-2.0
 //
 
-import Combine
+#if canImport(Combine)
 import XCTest
+import Combine
 
 @testable import Amplify
 @testable import AmplifyTestCommon
 
-@available(iOS 13.0, *)
 class AmplifyOperationCombineTests: XCTestCase {
 
     func testResultPublisherSucceeds() {
@@ -280,9 +280,8 @@ class MockPublisherOperation: AmplifyOperation<MockPublisherRequest, Int, APIErr
     }
 
     override func main() {
-        DispatchQueue.global().async {
-            self.responder(self)
-        }
+        self.responder(self)
     }
 
 }
+#endif

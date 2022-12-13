@@ -5,10 +5,10 @@
 // SPDX-License-Identifier: Apache-2.0
 //
 
+#if canImport(UIKit)
 import Foundation
 
 /// `LoggingCategoryPlugin` that wraps another`LoggingCategoryPlugin` and saves the logs in memory
-@available(iOS 13.0, *)
 public class PersistentLoggingPlugin: LoggingCategoryPlugin {
 
     var plugin: LoggingCategoryPlugin
@@ -28,9 +28,9 @@ public class PersistentLoggingPlugin: LoggingCategoryPlugin {
         return plugin.logger(forCategory: category)
     }
 
-    public func reset(onComplete: @escaping BasicClosure) {
+    public func reset() async {
         persistentLogWrapper = nil
-        plugin.reset(onComplete: onComplete)
+        await plugin.reset()
     }
 
     init(plugin: LoggingCategoryPlugin) {
@@ -46,5 +46,5 @@ public class PersistentLoggingPlugin: LoggingCategoryPlugin {
     }
 }
 
-@available(iOS 13.0, *)
 extension PersistentLoggingPlugin: AmplifyVersionable { }
+#endif

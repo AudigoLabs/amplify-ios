@@ -1,5 +1,151 @@
 # Changelog
+
+## 2.2.0 (2022-12-05)
+
+### Features
+
+- **Auth**: Adding Auth test cases for test harness (#2579)
+- **auth**: Make the presentation anchor optional (#2545)
+
+### Bug Fixes
+
+- **Auth**: Add correct validation for initial state when executing confirm sign in (#2587)
+- **Auth**: Fixing deviceSRP auth flow during MigrateAuth (#2584)
+- **datastore**: retry on subscription connection error (#2571)
+
+## 2.1.0 (2022-11-10)
+
+### Features
+
+- **storage**: Remove the async throws from the apis that return task (#2543)
+
+### Bug Fixes
+
+- **datastore**: improve sync event error handling - cannotParseResponse (#2536)
+- **datastore**: fix stop then start API call pattern (#2529)
+
+### Features
+
+- **storage**: Remove `async throws` from public apis that returns a task (#2543). The change avoids checking for error at two places and the api will become sync. 
+              **Note:** This change would break customer who use storage api and have Xcode setting to treat warnings as error. 
+
+## 2.0.2 (2022-11-02)
+
+### Bug Fixes
+
+- **auth**: Add secrethash to the resetPassword/resendSignUpCode (#2528)
+
+## 2.0.1 (2022-10-27)
+
+### Bug Fixes
+
+- **Analytics**: Making connectivity errors to be retried indefinitely (#2497)
+- Build failure in xcode 13.4 (#2498)
+- **Auth**: Making improvements to federation flow (#2488)
+- **analytics**: revert previous analytics limit commit (#2484)
+- **analytics**: update pinpoint event attribute limits to match docum (#2474)
+- Make AWSPluginsCore public (#2472)
+
 ## Unreleased
+
+## 2.0.0 (2022-10-17)
+
+### Breaking Changes
+- **Core**: 
+    - Updated all public apis to use the latest Swift concurrency features (Async/Await)
+    - Removed dependency from aws-sdk-ios from all plugins
+    - Cocoapods support is removed from v2.0.0
+
+- **Analytics**: 
+    - `identifyUser(:withProfile:)` has been renamed to `identifyUser(userId:userProfile:)`
+    - Removed support for different Analytics and Targeting regions
+    
+- **Predictions**:
+    - Predictions plugin is currently unavailable for this version
+    
+### Features
+- **Auth**: 
+    - Escape hatch apis for federation to Cognito Identity Pool
+    - Custom auth flow now support without SRP flow
+    - Supports user migration flow
+
+- **Analytics**: 
+    - Pinpoint APIs available through the escape hatch
+
+- **Storage**:
+    - Migrated storage plugin from TransferUtility
+
+## 1.27.1 (2022-07-22)
+### Bug Fixes
+- **Auth:** Mapping correct error when Device Operations fail due to user not signed in (#2023).
+
+## 1.27.0 (2022-07-14)
+
+### Features
+
+- **api**: AppSyncRTC 2.0.0 upgrade - Handle unauthorized connection (#1994)
+
+### Bug Fixes
+
+- **Auth**: Handling proper error when attempting to change password fails due to an expired session. (#1995)
+- **datastore**: stop sync engine on non-retryable errors to allow restart (#1901)
+- **datastore**: query for missing optional associations (#1849)
+- **datastore**: Test schema drift does not restart sync engine (#1868)
+
+## 1.26.2 (2022-06-10)
+
+### Bug Fixes
+
+- **datastore**: create pointer to temporal lock (#1883)
+
+## 1.26.1 (2022-06-02)
+
+### Bug Fixes
+
+- **datastore**: ModelSyncedEvent dispatch consistency (#1823)
+
+## 1.26.0 (2022-05-26)
+
+### Features
+
+- **DataStore**: Temporal performance enhancements (#1760)
+
+### Bug Fixes
+
+- **DataStore**: include table name inside quotes in SQL Update statement (#1824)
+
+## 1.25.0 (2022-05-19)
+
+### Features
+
+- **auth**: Add support for authType as runtime parameter (#1774)
+
+## 1.24.1 (2022-05-13)
+
+### Bug Fixes
+
+- **Auth**: Fixing a typo in the Auth error message (#1782) (#1798)
+- **DataStore**: retry on URLError.dataNotAllowed (#1791)
+- **DataStore**: retry initial sync network failures from RemoteSyncEngine (#1773)
+
+## 1.24.0 (2022-05-05)
+
+### Features
+
+- **auth**: Add support of custom endpoint for CognitoUserPool (#1715)
+
+## 1.23.2 (2022-05-04)
+
+### Bug Fixes
+
+- **DataStore**: Nesting DataStore integration tests (#1757)
+
+## 1.23.1 (2022-04-25)
+
+### Bug Fixes
+
+- **DataStore**: Cascade delete sync from children to parent models (#1731)
+
 ## 1.23.0 (2022-04-12)
 
 ### Features
@@ -16,6 +162,16 @@
 
 - **analytics**: Set pinpointConfiguration.debug on debug mode (#1689)
 - **DataStore**: Reconcile locally sourced mutations while subscriptions are disabled (#1712)
+
+### ⚠ BREAKING CHANGES
+- The escape hatch of Auth and Storage plugins now returns the underlying Swift SDK instead of AWSMobileClient and AWSTransferUtility.
+- Logging category loglevel enum were moved to Amplify class extension to namespace them.
+
+### Features
+
+- **Core**: Amplify now directly depends on AWS SDK for Swift.
+- **Auth**: Redesigned AWSCognitoAuthPlugin implementation using a state machine architecture. Internal dependency on AWSMobileClient is removed and the plugin directly depends on AWS SDK for Swift. The escape hatch now returns the underlying Swift SDK for Cognito UserPool and Cognito Identity Pool.
+- **Storage**: Removed the dependency on AWSTransferUtility and improved the internal logic of AWSS3StoragePlugin implementation.
 
 ## 1.22.3 (2022-04-02)
 

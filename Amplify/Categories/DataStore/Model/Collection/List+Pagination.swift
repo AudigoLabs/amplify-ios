@@ -17,34 +17,25 @@ extension List {
         case .loaded:
             return listProvider.hasNextPage()
         case .notLoaded:
-            let result = listProvider.load()
-            switch result {
-            case .success(let elements):
-                self.elements = elements
-                return listProvider.hasNextPage()
-            case .failure(let coreError):
-                Amplify.log.error(error: coreError)
-                return false
-            }
+            let message = "Call `fetch` to lazy load the list before using this method."
+            Amplify.log.error(message)
+            assertionFailure(message)
+            return false
         }
     }
 
     /// Retrieve the next page as a new in-memory List object. Calling `getNextPage(completion:)` will load the
     /// underlying elements of the receiver from the data source if not yet loaded before
-    public func getNextPage(completion: @escaping (Result<List<Element>, CoreError>) -> Void) {
+    public func getNextPage() async throws -> List<Element> {
         switch loadedState {
         case .loaded:
-            listProvider.getNextPage(completion: completion)
+            return try await listProvider.getNextPage()
         case .notLoaded:
-            let result = listProvider.load()
-            switch result {
-            case .success(let elements):
-                self.elements = elements
-                listProvider.getNextPage(completion: completion)
-            case .failure(let coreError):
-                Amplify.log.error(error: coreError)
-                completion(.failure(coreError))
-            }
+            let message = "Call `fetch` to lazy load the list before using this method."
+            let error: CoreError = .listOperation(message, "", nil)
+            Amplify.log.error(error: error)
+            assertionFailure(message)
+            throw error
         }
     }
 }

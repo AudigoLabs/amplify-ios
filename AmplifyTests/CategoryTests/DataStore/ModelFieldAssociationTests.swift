@@ -17,13 +17,13 @@ class ModelFieldAssociationTests: XCTestCase {
     }
 
     func testBelongsToWithCodingKeys() {
-        let belongsTo = ModelAssociation.belongsTo(associatedWith: Comment.keys.post, targetName: "postID")
+        let belongsTo = ModelAssociation.belongsTo(associatedWith: Comment.keys.post, targetNames: ["postID"])
         guard case .belongsTo(let fieldName, let target) = belongsTo else {
             XCTFail("Should create belongsTo association")
             return
         }
         XCTAssertEqual(fieldName, Comment.keys.post.stringValue)
-        XCTAssertEqual(target, "postID")
+        XCTAssertEqual(target, ["postID"])
     }
 
     func testHasManyWithCodingKeys() {
@@ -36,23 +36,23 @@ class ModelFieldAssociationTests: XCTestCase {
     }
 
     func testHasOneWithCodingKeys() {
-        let hasOne = ModelAssociation.hasOne(associatedWith: Comment.keys.post)
+        let hasOne = ModelAssociation.hasOne(associatedWith: Comment.keys.post, targetNames: [])
         guard case .hasOne(let fieldName, let target) = hasOne else {
             XCTFail("Should create hasOne association")
             return
         }
         XCTAssertEqual(fieldName, Comment.keys.post.stringValue)
-        XCTAssertNil(target)
+        XCTAssertEqual(target, [])
     }
 
     func testHasOneWithCodingKeysWithTargetName() {
-        let hasOne = ModelAssociation.hasOne(associatedWith: Comment.keys.post, targetName: "postID")
+        let hasOne = ModelAssociation.hasOne(associatedWith: Comment.keys.post, targetNames: ["postID"])
         guard case .hasOne(let fieldName, let target) = hasOne else {
             XCTFail("Should create hasOne association")
             return
         }
         XCTAssertEqual(fieldName, Comment.keys.post.stringValue)
-        XCTAssertEqual(target, "postID")
+        XCTAssertEqual(target, ["postID"])
     }
 
     func testBelongsToWithTargetName() {
@@ -62,11 +62,11 @@ class ModelFieldAssociationTests: XCTestCase {
             return
         }
         XCTAssertNil(fieldName)
-        XCTAssertNil(target)
+        XCTAssertEqual(target, ["postID"])
     }
 
     func testModelFieldWithBelongsToAssociation() {
-        let belongsTo = ModelAssociation.belongsTo(associatedWith: nil, targetName: "commentPostId")
+        let belongsTo = ModelAssociation.belongsTo(associatedWith: nil, targetNames: ["commentPostId"])
         let field = ModelField.init(name: "post",
                                     type: .model(type: Post.self),
                                     association: belongsTo)
@@ -90,7 +90,7 @@ class ModelFieldAssociationTests: XCTestCase {
     }
 
     func testModelFieldWithHasOneAssociation() {
-        let hasOne = ModelAssociation.hasOne(associatedWith: Comment.keys.post, targetName: "postID")
+        let hasOne = ModelAssociation.hasOne(associatedWith: Comment.keys.post, targetNames: ["postID"])
         let field = ModelField.init(name: "comment",
                                     type: .model(type: Comment.self),
                                     association: hasOne)

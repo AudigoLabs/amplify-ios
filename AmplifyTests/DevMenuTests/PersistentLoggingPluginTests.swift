@@ -5,20 +5,20 @@
 // SPDX-License-Identifier: Apache-2.0
 //
 
+#if canImport(UIKit)
 import XCTest
 @testable import Amplify
 @testable import AmplifyTestCommon
 
-@available(iOS 13.0.0, *)
 class PersistentLoggingPluginTests: XCTestCase {
 
     let provider = MockDevMenuContextProvider()
 
-    override func setUp() {
+    override func setUp() async throws {
         do {
-            Amplify.enableDevMenu(contextProvider: provider)
+            await Amplify.enableDevMenu(contextProvider: provider)
 
-            /// After Amplify.reset() is called in teardown(), Amplify.configure() doesn't
+            /// After await Amplify.reset() is called in teardown(), Amplify.configure() doesn't
             /// initialize the plugin for LoggingCategory . This doesn't call Amplify.getLoggingCategoryPlugin()
             /// and the plugin is not updated to PersistentLoggingPlugin. Making a call to
             /// add() so that configure() updates the plugin
@@ -43,7 +43,8 @@ class PersistentLoggingPluginTests: XCTestCase {
         XCTAssertTrue(devMenuPlugin.default is PersistentLogWrapper)
     }
 
-    override func tearDown() {
-        Amplify.reset()
+    override func tearDown() async throws {
+        await Amplify.reset()
     }
 }
+#endif

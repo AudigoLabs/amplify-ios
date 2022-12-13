@@ -10,11 +10,11 @@ import AWSPluginsCore
 import Foundation
 
 struct AnyModelTester: Model {
-    let id: Identifier
+    let id: String
     let stringProperty: String
     let intProperty: Int
 
-    init(id: Identifier = "test-id", stringProperty: String, intProperty: Int) {
+    init(id: String = "test-id", stringProperty: String, intProperty: Int) {
         self.id = id
         self.stringProperty = stringProperty
         self.intProperty = intProperty
@@ -49,10 +49,10 @@ extension AnyModelTester: Equatable { }
 
 extension AnyModel: Equatable {
     public static func == (lhs: AnyModel, rhs: AnyModel) -> Bool {
-        //swiftlint:disable force_try
+        // swiftlint:disable force_try
         let lhsInstance = try! lhs.instance.toJSON()
         let rhsInstance = try! rhs.instance.toJSON()
-        //swiftlint:enable force_try
+        // swiftlint:enable force_try
 
         return lhs.id == rhs.id
             && lhs.modelName == rhs.modelName

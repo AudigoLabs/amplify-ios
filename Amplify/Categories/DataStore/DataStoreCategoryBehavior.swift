@@ -12,32 +12,45 @@ public typealias DataStoreCategoryBehavior = DataStoreBaseBehavior & DataStoreSu
 public protocol DataStoreBaseBehavior {
 
     /// Saves the model to storage. If sync is enabled, also initiates a sync of the mutation to the remote API
+    @discardableResult
     func save<M: Model>(_ model: M,
-                        where condition: QueryPredicate?,
-                        completion: @escaping DataStoreCallback<M>)
+                        where condition: QueryPredicate?) async throws -> M
+
+    @available(*, deprecated, renamed: "query(byIdentifier:)")
+    func query<M: Model>(_ modelType: M.Type,
+                         byId id: String) async throws -> M?
 
     func query<M: Model>(_ modelType: M.Type,
-                         byId id: String,
-                         completion: DataStoreCallback<M?>)
+                         byIdentifier id: String) async throws -> M?
+        where M: ModelIdentifiable, M.IdentifierFormat == ModelIdentifierFormat.Default
+
+    func query<M: Model>(_ modelType: M.Type,
+                         byIdentifier id: ModelIdentifier<M, M.IdentifierFormat>) async throws -> M?
+        where M: ModelIdentifiable
 
     func query<M: Model>(_ modelType: M.Type,
                          where predicate: QueryPredicate?,
                          sort sortInput: QuerySortInput?,
-                         paginate paginationInput: QueryPaginationInput?,
-                         completion: DataStoreCallback<[M]>)
+                         paginate paginationInput: QueryPaginationInput?) async throws -> [M]
 
     func delete<M: Model>(_ model: M,
-                          where predicate: QueryPredicate?,
-                          completion: @escaping DataStoreCallback<Void>)
+                          where predicate: QueryPredicate?) async throws
 
     func delete<M: Model>(_ modelType: M.Type,
                           withId id: String,
-                          where predicate: QueryPredicate?,
-                          completion: @escaping DataStoreCallback<Void>)
+                          where predicate: QueryPredicate?) async throws
+    
+    func delete<M: Model>(_ modelType: M.Type,
+                          withIdentifier id: String,
+                          where predicate: QueryPredicate?) async throws where M: ModelIdentifiable,
+                                                                               M.IdentifierFormat == ModelIdentifierFormat.Default
 
     func delete<M: Model>(_ modelType: M.Type,
-                          where predicate: QueryPredicate,
-                          completion: @escaping DataStoreCallback<Void>)
+                          withIdentifier id: ModelIdentifier<M, M.IdentifierFormat>,
+                          where predicate: QueryPredicate?) async throws where M: ModelIdentifiable
+
+    func delete<M: Model>(_ modelType: M.Type,
+                           where predicate: QueryPredicate) async throws
 
     /**
      Synchronization starts automatically whenever you run any DataStore operation (query(), save(), delete())
@@ -45,7 +58,7 @@ public protocol DataStoreBaseBehavior {
 
      - parameter completion: callback to be invoked on success or failure
      */
-    func start(completion: @escaping DataStoreCallback<Void>)
+    func start() async throws
 
     /**
      To stop the DataStore sync process, you can use DataStore.stop(). This ensures the real time subscription
@@ -55,31 +68,29 @@ public protocol DataStoreBaseBehavior {
 
      - parameter completion: callback to be invoked on success or failure
      */
-    func stop(completion: @escaping DataStoreCallback<Void>)
+    func stop() async throws
 
     /**
      To clear local data from DataStore, use the clear method.
 
      - parameter completion: callback to be invoked on success or failure
      */
-    func clear(completion: @escaping DataStoreCallback<Void>)
+    func clear() async throws
 }
 
 public protocol DataStoreSubscribeBehavior {
-    /// Returns a Publisher for model changes (create, updates, delete)
+    /// Returns an AmplifyAsyncThrowingSequence for model changes (create, updates, delete)
     /// - Parameter modelType: The model type to observe
-    @available(iOS 13.0, *)
-    func publisher<M: Model>(for modelType: M.Type) -> AnyPublisher<MutationEvent, DataStoreError>
-
+    func observe<M: Model>(_ modelType: M.Type) -> AmplifyAsyncThrowingSequence<MutationEvent>
+    
     /// Returns a Publisher for query snapshots.
     ///
     /// - Parameters:
     ///   - modelType: The model type to observe
     ///   - predicate: The predicate to match for filtered results
     ///   - sortInput: The field and order of data to be returned
-    @available(iOS 13.0, *)
     func observeQuery<M: Model>(for modelType: M.Type,
                                 where predicate: QueryPredicate?,
                                 sort sortInput: QuerySortInput?)
-    -> AnyPublisher<DataStoreQuerySnapshot<M>, DataStoreError>
+        -> AmplifyAsyncThrowingSequence<DataStoreQuerySnapshot<M>>
 }

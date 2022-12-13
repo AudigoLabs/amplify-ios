@@ -6,14 +6,14 @@
 //
 
 import Amplify
+import AWSPluginsCore
 import Combine
 import Foundation
 
 class MockAPICategoryPlugin: MessageReporter,
                              APICategoryPlugin,
-                             APICategoryReachabilityBehavior {
-
-
+                             APICategoryReachabilityBehavior,
+                             APICategoryGraphQLBehaviorExtended {
 
     var authProviderFactory: APIAuthProviderFactory?
 
@@ -23,7 +23,6 @@ class MockAPICategoryPlugin: MessageReporter,
 
     private var oidcProvider: Any?
 
-    @available(iOS 13.0, *)
     init(reachabilityPublisher: AnyPublisher<ReachabilityUpdate, Never>) {
         self._reachabilityPublisher = reachabilityPublisher
         super.init()
@@ -45,10 +44,9 @@ class MockAPICategoryPlugin: MessageReporter,
         notify("configure")
     }
 
-    func reset(onComplete: @escaping BasicClosure) {
+    func reset() {
         notify("reset")
         listeners.set([])
-        onComplete()
     }
 
     // MARK: - Request-based GraphQL methods
@@ -75,6 +73,14 @@ class MockAPICategoryPlugin: MessageReporter,
 
         return operation
     }
+    
+    func mutate<R>(request: GraphQLRequest<R>) async throws -> GraphQLTask<R>.Success {
+        // This is a really weighty notification message, but needed for tests to be able to assert that a particular
+        // model is being mutated
+        notify("mutate(request) document: \(request.document); variables: \(String(describing: request.variables))")
+
+        return .failure(.unknown("", "'", nil))
+    }
 
     func query<R: Decodable>(request: GraphQLRequest<R>,
                              listener: GraphQLOperation<R>.ResultListener?) -> GraphQLOperation<R> {
@@ -98,6 +104,22 @@ class MockAPICategoryPlugin: MessageReporter,
         return operation
     }
 
+    func query<R: Decodable>(request: GraphQLRequest<R>) async throws -> GraphQLTask<R>.Success {
+        notify("query(request:) request: \(request)")
+
+        if let responder = responders[.queryRequestResponse] as? QueryRequestResponder<R> {
+            
+            let result = responder.callback(request)
+            switch result {
+            case .success(let response):
+                return response
+            case .failure(let error):
+                throw error
+            }
+        }
+        return .failure(.unknown("", "", nil))        
+    }
+    
     func subscribe<R: Decodable>(request: GraphQLRequest<R>,
                                  valueListener: GraphQLSubscriptionOperation<R>.InProcessListener?,
                                  completionListener: GraphQLSubscriptionOperation<R>.ResultListener?)
@@ -126,12 +148,30 @@ class MockAPICategoryPlugin: MessageReporter,
             return operation
     }
 
-    @available(iOS 13.0, *)
+    func subscribe<R: Decodable>(request: GraphQLRequest<R>) -> AmplifyAsyncThrowingSequence<GraphQLSubscriptionEvent<R>> {
+        notify(
+                """
+                subscribe(request:listener:) document: \(request.document); \
+                variables: \(String(describing: request.variables))
+                """
+        )
+        
+        let requestOptions = GraphQLOperationRequest<R>.Options(pluginOptions: nil)
+        let request = GraphQLOperationRequest<R>(apiName: request.apiName,
+                                                 operationType: .subscription,
+                                                 document: request.document,
+                                                 variables: request.variables,
+                                                 responseType: request.responseType,
+                                                 options: requestOptions)
+        
+        let taskRunner = MockAWSGraphQLSubscriptionTaskRunner(request: request)
+        return taskRunner.sequence
+    }
+    
     public func reachabilityPublisher(for apiName: String?) -> AnyPublisher<ReachabilityUpdate, Never>? {
         reachabilityPublisher()
     }
 
-    @available(iOS 13.0, *)
     public func reachabilityPublisher() -> AnyPublisher<ReachabilityUpdate, Never>? {
         if let reachabilityPublisher = _reachabilityPublisher as? AnyPublisher<ReachabilityUpdate, Never> {
             return reachabilityPublisher
@@ -153,6 +193,11 @@ class MockAPICategoryPlugin: MessageReporter,
         let operation = MockAPIOperation(request: operationRequest)
         return operation
     }
+    
+    func get(request: RESTRequest) async throws -> RESTTask.Success {
+        notify("get")
+        return Data()
+    }
 
     func put(request: RESTRequest, listener: RESTOperation.ResultListener?) -> RESTOperation {
         notify("put")
@@ -164,6 +209,19 @@ class MockAPICategoryPlugin: MessageReporter,
                                            options: RESTOperationRequest.Options())
         let operation = MockAPIOperation(request: request)
         return operation
+    }
+    
+    func put(request: RESTRequest) async throws -> RESTTask.Success {
+        notify("put")
+        let request = RESTOperationRequest(apiName: request.apiName,
+                                           operationType: .put,
+                                           path: request.path,
+                                           queryParameters: request.queryParameters,
+                                           body: request.body,
+                                           options: RESTOperationRequest.Options())
+        let operation = MockAPIOperation(request: request)
+        let taskAdapter = AmplifyOperationTaskAdapter(operation: operation)
+        return try await taskAdapter.value
     }
 
     func post(request: RESTRequest, listener: RESTOperation.ResultListener?) -> RESTOperation {
@@ -178,6 +236,19 @@ class MockAPICategoryPlugin: MessageReporter,
         return operation
     }
 
+    func post(request: RESTRequest) async throws -> RESTTask.Success {
+        notify("post")
+        let request = RESTOperationRequest(apiName: request.apiName,
+                                           operationType: .post,
+                                           path: request.path,
+                                           queryParameters: request.queryParameters,
+                                           body: request.body,
+                                           options: RESTOperationRequest.Options())
+        let operation = MockAPIOperation(request: request)
+        let taskAdapter = AmplifyOperationTaskAdapter(operation: operation)
+        return try await taskAdapter.value
+    }
+    
     func delete(request: RESTRequest, listener: RESTOperation.ResultListener?) -> RESTOperation {
         notify("delete")
         let request = RESTOperationRequest(apiName: request.apiName,
@@ -190,6 +261,19 @@ class MockAPICategoryPlugin: MessageReporter,
         return operation
     }
 
+    func delete(request: RESTRequest) async throws -> RESTTask.Success {
+        notify("delete")
+        let request = RESTOperationRequest(apiName: request.apiName,
+                                           operationType: .delete,
+                                           path: request.path,
+                                           queryParameters: request.queryParameters,
+                                           body: request.body,
+                                           options: RESTOperationRequest.Options())
+        let operation = MockAPIOperation(request: request)
+        let taskAdapter = AmplifyOperationTaskAdapter(operation: operation)
+        return try await taskAdapter.value
+    }
+    
     func patch(request: RESTRequest, listener: RESTOperation.ResultListener?) -> RESTOperation {
         notify("patch")
         let request = RESTOperationRequest(apiName: request.apiName,
@@ -200,6 +284,19 @@ class MockAPICategoryPlugin: MessageReporter,
                                            options: RESTOperationRequest.Options())
         let operation = MockAPIOperation(request: request)
         return operation
+    }
+    
+    func patch(request: RESTRequest) async throws -> RESTTask.Success {
+        notify("patch")
+        let request = RESTOperationRequest(apiName: request.apiName,
+                                           operationType: .patch,
+                                           path: request.path,
+                                           queryParameters: request.queryParameters,
+                                           body: request.body,
+                                           options: RESTOperationRequest.Options())
+        let operation = MockAPIOperation(request: request)
+        let taskAdapter = AmplifyOperationTaskAdapter(operation: operation)
+        return try await taskAdapter.value
     }
 
     func head(request: RESTRequest, listener: RESTOperation.ResultListener?) -> RESTOperation {
@@ -213,6 +310,20 @@ class MockAPICategoryPlugin: MessageReporter,
         let operation = MockAPIOperation(request: request)
         return operation
     }
+    
+    func head(request: RESTRequest) async throws -> RESTTask.Success {
+        notify("head")
+        let request = RESTOperationRequest(apiName: request.apiName,
+                                           operationType: .head,
+                                           path: request.path,
+                                           queryParameters: request.queryParameters,
+                                           body: request.body,
+                                           options: RESTOperationRequest.Options())
+        let operation = MockAPIOperation(request: request)
+        let taskAdapter = AmplifyOperationTaskAdapter(operation: operation)
+        return try await taskAdapter.value
+    }
+    
 
     func add(interceptor: URLRequestInterceptor, for apiName: String) {
         notify("addInterceptor")
@@ -301,24 +412,40 @@ class MockAPIAuthProviderFactory: APIAuthProviderFactory {
 
 class MockOIDCAuthProvider: AmplifyOIDCAuthProvider {
     var result: Result<AuthToken, Error>?
-
-    func getLatestAuthToken() -> Result<AuthToken, Error> {
-        if let result = result {
-            return result
+    
+    func getLatestAuthToken() async throws -> String {
+        if case let .success(token) = result {
+            return token
         } else {
-            return .success("token")
+            return "token"
         }
     }
 }
 
 class MockFunctionAuthProvider: AmplifyFunctionAuthProvider {
     var result: Result<AuthToken, Error>?
-
-    func getLatestAuthToken() -> Result<AuthToken, Error> {
-        if let result = result {
-            return result
+    
+    func getLatestAuthToken() async throws -> String {
+        if case let .success(token) = result {
+            return token
         } else {
-            return .success("token")
+            return "token"
         }
     }
+}
+
+class MockAWSGraphQLSubscriptionTaskRunner<R: Decodable>: InternalTaskRunner, InternalTaskAsyncThrowingSequence, InternalTaskThrowingChannel {
+    
+    public typealias Request = GraphQLOperationRequest<R>
+    public typealias InProcess = GraphQLSubscriptionEvent<R>
+    public var request: GraphQLOperationRequest<R>
+    public var context = InternalTaskAsyncThrowingSequenceContext<GraphQLSubscriptionEvent<R>>()
+    func run() async throws {
+        
+    }
+    
+    init(request: GraphQLOperationRequest<R>) {
+        self.request = request
+    }
+    
 }

@@ -17,51 +17,38 @@ extension Amplify {
     /// - Releases each configured category, and replaces the instances referred to by the static accessor properties
     ///   (e.g., `Amplify.Hub`) with new instances. These instances must subsequently have providers added, and be
     ///   configured prior to use.
-    static public func reset() {
+    static func reset() async {
         // Looping through all categories to ensure we don't accidentally forget a category at some point in the future
-
-        let group = DispatchGroup()
-
         for categoryType in CategoryType.allCases {
             switch categoryType {
             case .analytics:
-                reset(Analytics, in: group) { group.leave() }
+                await reset(Analytics)
             case .api:
-                reset(API, in: group) { group.leave() }
+                await reset(API)
             case .auth:
-                reset(Auth, in: group) { group.leave() }
+                await reset(Auth)
             case .dataStore:
-                reset(DataStore, in: group) { group.leave() }
+                await reset(DataStore)
             case .geo:
-                reset(Geo, in: group) { group.leave() }
+                await reset(Geo)
             case .storage:
-                reset(Storage, in: group) { group.leave() }
+                await reset(Storage)
             case .predictions:
-                reset(Predictions, in: group) { group.leave() }
+                await reset(Predictions)
             case .hub, .logging:
                 // Hub and Logging should be reset after all other categories
                 break
             }
         }
 
-        group.wait()
+        await reset(Hub)
+        await reset(Logging)
 
-        for categoryType in CategoryType.allCases {
-            switch categoryType {
-            case .hub:
-                reset(Hub, in: group) { group.leave() }
-            case .logging:
-                reset(Logging, in: group) { group.leave() }
-            default:
-                break
-            }
-        }
-
-        if #available(iOS 13.0.0, *) {
+#if canImport(UIKit)
+        await MainActor.run {
             devMenu = nil
         }
-
-        group.wait()
+#endif
 
         // Initialize Logging and Hub first, to ensure their default plugins are registered and available to other
         // categories during their initialization and configuration phases.
@@ -77,7 +64,7 @@ extension Amplify {
             case .analytics:
                 Analytics = AnalyticsCategory()
             case .api:
-                API = AmplifyAPICategory()
+                API = APICategory()
             case .auth:
                 Auth = AuthCategory()
             case .dataStore:
@@ -94,15 +81,9 @@ extension Amplify {
         isConfigured = false
     }
 
-    /// If `candidate` is `Resettable`, `enter()`s `group`, then invokes `candidate.reset(onComplete)` on a background
-    /// queue. If `candidate` is not resettable, exits without invoking `onComplete`.
-    private static func reset(_ candidate: Any, in group: DispatchGroup, onComplete: @escaping BasicClosure) {
-        guard let resettable = candidate as? Resettable else {
-            return
-        }
+    private static func reset(_ candidate: Any) async {
+        guard let resettable = candidate as? Resettable else { return }
 
-        group.enter()
-        resettable.reset(onComplete: onComplete)
+        await resettable.reset()
     }
-
 }

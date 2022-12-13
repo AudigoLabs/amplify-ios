@@ -6,6 +6,7 @@
 //
 
 import Amplify
+import Foundation
 
 class MockGeoCategoryPlugin: MessageReporter, GeoCategoryPlugin {
     var key: String {
@@ -16,35 +17,28 @@ class MockGeoCategoryPlugin: MessageReporter, GeoCategoryPlugin {
         notify()
     }
 
-    func reset(onComplete: @escaping BasicClosure) {
+    func reset() {
         notify("reset")
-        onComplete()
     }
 
-    func search(for text: String,
-                options: Geo.SearchForTextOptions? = nil,
-                completionHandler: @escaping Geo.ResultsHandler<[Geo.Place]>) {
-
+    func search(for text: String, options: Geo.SearchForTextOptions?) async throws -> [Geo.Place] {
         notify("search(for text:\(text))")
-        completionHandler(.success([createPlace()]))
+        return [createPlace()]
     }
 
-    func search(for coordinates: Geo.Coordinates,
-                options: Geo.SearchForCoordinatesOptions? = nil,
-                completionHandler: @escaping Geo.ResultsHandler<[Geo.Place]>) {
-
+    func search(for coordinates: Geo.Coordinates, options: Geo.SearchForCoordinatesOptions?) async throws -> [Geo.Place] {
         notify("search(for coordinates:\(coordinates))")
-        completionHandler(.success([createPlace()]))
+        return [createPlace()]
     }
 
-    func availableMaps(completionHandler: @escaping Geo.ResultsHandler<[Geo.MapStyle]>) {
+    func availableMaps() async throws -> [Geo.MapStyle] {
         notify("availableMaps")
-        completionHandler(.success([createMapStyle()]))
+        return [createMapStyle()]
     }
 
-    func defaultMap(completionHandler: @escaping Geo.ResultsHandler<Geo.MapStyle>) {
+    func defaultMap() async throws -> Geo.MapStyle {
         notify("defaultMap")
-        completionHandler(.success(createMapStyle()))
+        return createMapStyle()
     }
 
     private func createMapStyle() -> Geo.MapStyle {

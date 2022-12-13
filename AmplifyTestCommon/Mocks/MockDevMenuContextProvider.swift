@@ -5,7 +5,9 @@
 // SPDX-License-Identifier: Apache-2.0
 //
 
+#if canImport(UIKit)
 import Amplify
+import UIKit
 
 /// Mock class for presenting UI context to developer menu
 class MockDevMenuContextProvider: DevMenuPresentationContextProvider {
@@ -16,3 +18,4 @@ class MockDevMenuContextProvider: DevMenuPresentationContextProvider {
         return uiWindow
     }
 }
+#endif

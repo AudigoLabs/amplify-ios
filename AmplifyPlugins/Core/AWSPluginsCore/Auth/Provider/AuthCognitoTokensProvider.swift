@@ -6,6 +6,7 @@
 //
 
 import Amplify
+import Foundation
 
 public protocol AuthCognitoTokensProvider {
     func getCognitoTokens() -> Result<AuthCognitoTokens, AuthError>
@@ -18,4 +19,5 @@ public protocol AuthCognitoTokens {
     var accessToken: String {get}
 
     var refreshToken: String {get}
+
 }

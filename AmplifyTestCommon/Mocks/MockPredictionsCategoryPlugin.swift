@@ -6,7 +6,6 @@
 //
 
 import Amplify
-import UIKit
 import Foundation
 
 class MockPredictionsCategoryPlugin: MessageReporter, PredictionsCategoryPlugin {
@@ -69,9 +68,8 @@ class MockPredictionsCategoryPlugin: MessageReporter, PredictionsCategoryPlugin 
         return MockPredictionsInterpretOperation(request: request)
     }
 
-    func reset(onComplete: @escaping BasicClosure) {
+    func reset() {
         notify("reset")
-        onComplete()
     }
 
     var key: String {

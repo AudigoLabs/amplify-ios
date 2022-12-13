@@ -2,10 +2,100 @@
 
 version: 2.1
 
+parameters:
+  ios-destination:
+    type: string
+    default: platform=iOS Simulator,name=iPhone 14,OS=latest
+  macos-destination:
+    type: string
+    default: platform=macOS,arch=x86_64
+
+orbs:
+  # Using inline orb for now
+  getting-started-smoke-test:
+    orbs:
+      macos: circleci/macos@2
+      node: circleci/node@5.0.2
+      ruby: circleci/ruby@1.6.0
+    commands:
+      run-with-retry:
+        description: Run command with retry
+        parameters:
+          label:
+            description: Display name
+            type: string
+          command:
+            description: Command to run
+            type: string
+          retry-count:
+            description: Number of retry
+            type: integer
+            default: 3
+          sleep:
+            description: Wait duration until next retry
+            type: integer
+            default: 5
+          no_output_timeout:
+            description: Elapsed time the command can run without output
+            type: string
+            default: 10m
+        steps:
+          - run:
+              name: << parameters.label >>
+              command: |
+                retry() {
+                  MAX_RETRY=<< parameters.retry-count >>
+                  n=0
+                  until [ $n -ge $MAX_RETRY ]
+                  do
+                      << parameters.command >> && break
+                      n=$[$n+1]
+                      sleep << parameters.sleep >>
+                  done
+                  if [ $n -ge $MAX_RETRY ]; then
+                    echo "failed: ${@}" >&2
+                    exit 1
+                  fi
+                }
+                retry
+              no_output_timeout: << parameters.no_output_timeout >>
+    jobs:
+      ios:
+        parameters:
+          xcode-version:
+            type: string
+            default: 13.4.1
+          simulator-device:
+            type: string
+            default: iPhone 13
+          simulator-os-version:
+            type: string
+            default: "15.5"
+        working_directory: ~/ios-canaries/canaries/example
+        macos:
+          xcode: <<parameters.xcode-version>>
+        environment:
+          FL_OUTPUT_DIR: output
+        # Add steps to the job
+        # See: https://circleci.com/docs/2.0/configuration-reference/#steps
+        steps:
+          - checkout:
+              path: ~/ios-canaries
+          - node/install
+          - run: npm install -g @aws-amplify/cli
+          - run: amplify init --quickstart --frontend ios
+          - macos/preboot-simulator:
+              device: <<parameters.simulator-device>>
+              version: <<parameters.simulator-os-version>>
+          - ruby/install-deps
+          - run-with-retry:
+              label: Run tests
+              command: bundle exec fastlane scan --device "<<parameters.simulator-device>>" --deployment_target_version "<<parameters.simulator-os-version>>"
+
 defaults: &defaults
   macos:
-    xcode: '13.0.0'
-  working_directory: ~/amplify-ios
+    xcode: '14.0.0'
+  working_directory: ~/amplify-swift
   environment:
     BUNDLE_PATH: vendor/bundle
 
@@ -19,32 +109,13 @@ references:
         - v2-repo-{{ .Branch }}
         - v2-repo
 
-  pods_cache_key: &pods_cache_key v3-dependency-pods-{{ checksum "~/amplify-ios/Podfile" }}
-
-  pods_backup_cache_key: &pods_backup_cache_key v3-dependency-pods
-
-  restore_pods: &restore_pods
-    restore_cache:
-      keys:
-        - *pods_cache_key
-        - *pods_backup_cache_key
-
-  plugin_pods_cache_key: &plugin_pods_cache_key
-
 commands:
-  pre_start_simulator:
-    description: >-
-      pre start simulator, build may fail if simulator is not started
-    steps:
-      - run:
-          name: Pre-start simulator
-          command: bash ~/amplify-ios/CircleciScripts/pre_start_simulator.sh
 
   restore_gems:
     steps:
       - restore_cache:
           keys:
-            - v2-gems-{{ checksum "~/amplify-ios/Gemfile.lock" }}
+            - v2-gems-{{ checksum "~/amplify-swift/Gemfile.lock" }}
             - v2-gems-
 
   check_bundle:
@@ -59,31 +130,10 @@ commands:
           name: Make artifacts directory
           command: mkdir -p "artifacts"
 
-  save_plugin_pods:
-    parameters:
-      prefix:
-        type: string
-    steps:
-      - save_cache:
-          key: v1-<< parameters.prefix >>-dependency-pods-{{ checksum "Podfile" }}
-          paths:
-            - ./Pods
-
-  restore_plugin_pods:
-    parameters:
-      prefix:
-        type: string
-    steps:
-      - restore_cache:
-          keys:
-            - v1-<< parameters.prefix >>-dependency-pods-{{ checksum "Podfile" }}
-            - v1-<< parameters.prefix >>-dependency-pods
-
   upload_artifacts:
     steps:
       - store_artifacts:
           path: artifacts
-
 
 jobs:
   checkout_code:
@@ -94,7 +144,7 @@ jobs:
       - save_cache:
           key: *repo_cache_key
           paths:
-            - ~/amplify-ios
+            - ~/amplify-swift
 
   install_gems:
     <<: *defaults
@@ -108,98 +158,52 @@ jobs:
             BUNDLE_JOBS: 4
             BUNDLE_RETRY: 3
       - save_cache:
-          key: v2-gems-{{ checksum "~/amplify-ios/Gemfile.lock" }}
+          key: v2-gems-{{ checksum "~/amplify-swift/Gemfile.lock" }}
           paths:
             - vendor/bundle
 
-  build_test_amplify:
+  build_amplify_ios_spm:
     <<: *defaults
     steps:
       - *restore_repo
-      - pre_start_simulator
-      - run: pod install
-      - restore_gems
-      - check_bundle
       - make_artifacts_directory
       - run:
-          name: Build amplify
-          command: xcodebuild build-for-testing -workspace Amplify.xcworkspace -scheme Amplify -sdk iphonesimulator -destination "${destination}" | tee "artifacts/build-Amplify.log" | xcpretty
-      - run:
-          name: Test amplify
-          command: xcodebuild test -workspace Amplify.xcworkspace -scheme Amplify -sdk iphonesimulator -destination "${destination}" | tee "artifacts/test-Amplify.log" | xcpretty --simple --color --report junit
-      - run:
-          name: Upload coverage report to Codecov
-          command: bash ~/amplify-ios/build-support/codecov.sh -F 'Amplify' -J '^Amplify$'
-      - store_test_results:
-          path: build/reports
-      - upload_artifacts
-
-  build_amplify_spm:
-    <<: *defaults
-    working_directory: ~/amplify-ios/.swiftpm/xcode
-    steps:
-      - *restore_repo
-      - pre_start_simulator
-      - restore_gems
-      - check_bundle
-      - make_artifacts_directory
-      - run:
-          name: Build amplify for SPM
-          command: xcodebuild build-for-testing -workspace package.xcworkspace -scheme Amplify-Package -sdk iphonesimulator -destination "${destination}" | tee "artifacts/build-Ampify-for-SPM.log" | xcpretty
-
-  build_test_aws_plugins_core:
+          name: Build amplify for ios SPM
+          command: xcodebuild build -scheme Amplify-Package -sdk iphonesimulator -destination "<< pipeline.parameters.ios-destination >>" | tee "artifacts/build-Ampify-for-ios-SPM.log" | xcpretty
+  build_amplify_macos_spm:
     <<: *defaults
     steps:
       - *restore_repo
-      - pre_start_simulator
-      - run: pod install
-      - restore_gems
-      - check_bundle
       - make_artifacts_directory
       - run:
-          name: Build AWS plugins core
-          command: xcodebuild build-for-testing -workspace Amplify.xcworkspace -scheme AWSPluginsCore -sdk iphonesimulator -destination "${destination}" | tee "artifacts/build-AWSPluginsCore.log" | xcpretty
-      - run:
-          name: Test AWS plugins core
-          command: xcodebuild test -workspace Amplify.xcworkspace -scheme AWSPluginsCore -sdk iphonesimulator -destination "${destination}" | tee "artifacts/test-AWSPluginsCore.log" | xcpretty --simple --color --report junit
-      - run:
-          name: Upload coverage report to Codecov
-          command: bash ~/amplify-ios/build-support/codecov.sh -F 'AWSPluginsCore' -J '^AWSPluginsCore$'
-      - store_test_results:
-          path: build/reports
-      - upload_artifacts
+          name: Build amplify for macos SPM
+          command: xcodebuild build -scheme Amplify-Package -sdk macosx -destination "<< pipeline.parameters.macos-destination >>" | tee "artifacts/build-Ampify-for-macos-SPM.log" | xcpretty
 
-  plugin_unit_test:
+  unit_test:
     <<: *defaults
     parameters:
-      path:
+      xcode-version:
         type: string
-      workspace:
-        type: string
+        default: 14.0.0
       scheme:
         type: string
-    working_directory: ~/amplify-ios/AmplifyPlugins/<< parameters.path >>
-    description: << parameters.path >> unit test
+      sdk:
+        type: string
+      destination:
+        type: string
+    description: << parameters.scheme >> unit test
     steps:
       - *restore_repo
-      - restore_plugin_pods:
-          prefix: << parameters.path >>
-      - pre_start_simulator
-      - run: pod install
-      - save_plugin_pods:
-          prefix: << parameters.path >>
-      - restore_gems
-      - check_bundle
       - make_artifacts_directory
       - run:
-          name: Build << parameters.path >>
-          command: xcodebuild build-for-testing -workspace << parameters.workspace >>.xcworkspace -scheme << parameters.scheme >> -sdk iphonesimulator -destination "${destination}" | tee "artifacts/build-<< parameters.scheme >>.log" | xcpretty
+          name: Build << parameters.scheme >>
+          command: xcodebuild build-for-testing -scheme <<parameters.scheme>> -sdk << parameters.sdk >> -destination "<<parameters.destination>>" | tee "artifacts/build-<< parameters.scheme >>-<< parameters.sdk >>.log" | xcpretty
       - run:
-          name: Test << parameters.path >>
-          command: xcodebuild test -workspace << parameters.workspace >>.xcworkspace -scheme << parameters.scheme >> -sdk iphonesimulator -destination "${destination}" | tee "artifacts/test-<< parameters.scheme >>.log" | xcpretty --simple --color --report junit
+          name: Test << parameters.scheme >>
+          command: xcodebuild test -scheme <<parameters.scheme>> -sdk << parameters.sdk >> -destination "<<parameters.destination>>"  | tee "artifacts/test-<< parameters.scheme >>-<< parameters.sdk >>.log" | xcpretty --simple --color --report junit
       - run:
-          name: Upload << parameters.path >> coverage report to Codecov
-          command: bash ~/amplify-ios/build-support/codecov.sh -F << parameters.path >>_plugin_unit_test -J '^<< parameters.scheme >>$'
+          name: Upload << parameters.scheme >> coverage report to Codecov
+          command: bash ~/amplify-swift/build-support/codecov.sh -F << parameters.scheme >>_unit_test -J '^<< parameters.scheme >>$'
       - store_test_results:
           path: build/reports
       - upload_artifacts
@@ -212,7 +216,7 @@ jobs:
       - check_bundle
       - run:
           name: Jazzy API doc generation
-          command: bash ~/amplify-ios/CircleciScripts/jazzy_doc_gen.sh
+          command: bash ~/amplify-swift/CircleciScripts/jazzy_doc_gen.sh
 
   deploy:
     <<: *defaults
@@ -220,112 +224,175 @@ jobs:
       lane:
         type: string
         default: 'unstable'
-    description: deploy pods to trunk
+    description: deploy new release
     steps:
       - add_ssh_keys:
           fingerprints:
-            - '80:9a:29:87:ac:5f:1a:9b:c5:a4:3d:37:c1:10:87:2f'
+            - '7a:f2:7f:a6:62:1a:9e:0f:f1:03:8c:fc:86:93:77:6e'
       - *restore_repo
       - restore_gems
       - check_bundle
       - run:
-          name: Release pods
+          name: Release Amplify for Swift
           command: bundle exec fastlane << parameters.lane >>
           no_output_timeout: 60m
 
 deploy_requires: &deploy_requires
   requires:
-    - build_test_amplify
-    - build_amplify_spm
-    - build_test_aws_plugins_core
-    - unit_test_analytics
-    - unit_test_api
-    - unit_test_auth
-    - unit_test_core_ml
-    - unit_test_datastore
-    - unit_test_geo
-    - unit_test_predictions
-    - unit_test_storage
+    - build_amplify_ios_spm
+    - build_amplify_macos_spm
+    - ios_unit_test_amplify
+    - ios_unit_test_awspluginscore
+    - ios_unit_test_analytics
+    - ios_unit_test_api
+    - ios_unit_test_auth
+    - ios_unit_test_datastore
+    - ios_unit_test_geo
+    - ios_unit_test_storage
+    - macos_unit_test_amplify
+    - macos_unit_test_awspluginscore
+    - macos_unit_test_analytics
+    - macos_unit_test_api
+    - macos_unit_test_auth
+    - macos_unit_test_datastore
+    - macos_unit_test_geo
+    - macos_unit_test_storage
 
 workflows:
   build_test_deploy:
+    when:
+      not:
+        equal: [ scheduled_pipeline, << pipeline.trigger_source >> ]
     jobs:
       - checkout_code
       - install_gems:
           requires:
             - checkout_code
-      - build_test_amplify:
+      - build_amplify_ios_spm:
           requires:
             - install_gems
-      - build_test_aws_plugins_core:
+      - build_amplify_macos_spm:
           requires:
-            - install_gems
-      - build_amplify_spm:
+            - install_gems         
+      - unit_test:
+          name: ios_unit_test_amplify
+          scheme: Amplify
+          sdk: iphonesimulator
+          destination: << pipeline.parameters.ios-destination >>
           requires:
-            - install_gems
-      - plugin_unit_test:
-          name: unit_test_analytics
-          path: Analytics
-          workspace: AnalyticsCategoryPlugin
+            - build_amplify_ios_spm
+      - unit_test:
+          name: ios_unit_test_awspluginscore
+          scheme: AWSPluginsCore
+          sdk: iphonesimulator
+          destination: << pipeline.parameters.ios-destination >>
+          requires:
+            - build_amplify_ios_spm
+      - unit_test:
+          name: ios_unit_test_analytics
           scheme: AWSPinpointAnalyticsPlugin
+          sdk: iphonesimulator
+          destination: << pipeline.parameters.ios-destination >>
           requires:
-            - install_gems
-      - plugin_unit_test:
-          name: unit_test_api
-          path: API
-          workspace: APICategoryPlugin
-          scheme: AWSAPICategoryPlugin
+            - build_amplify_ios_spm
+      - unit_test:
+          name: ios_unit_test_api
+          scheme: AWSAPIPlugin
+          sdk: iphonesimulator
+          destination: << pipeline.parameters.ios-destination >>
           requires:
-            - install_gems
-      - plugin_unit_test:
-          name: unit_test_auth
-          path: Auth
-          workspace: AWSCognitoAuthPlugin
+            - build_amplify_ios_spm
+      - unit_test:
+          name: ios_unit_test_auth
           scheme: AWSCognitoAuthPlugin
+          sdk: iphonesimulator
+          destination: << pipeline.parameters.ios-destination >>
           requires:
-            - install_gems
-      - plugin_unit_test:
-          name: unit_test_datastore
-          path: DataStore
-          workspace: DataStoreCategoryPlugin
-          scheme: AWSDataStoreCategoryPlugin
+            - build_amplify_ios_spm
+      - unit_test:
+          name: ios_unit_test_datastore
+          scheme: AWSDataStorePlugin
+          sdk: iphonesimulator
+          destination: << pipeline.parameters.ios-destination >>
           requires:
-            - install_gems
-      - plugin_unit_test:
-          name: unit_test_geo
-          path: Geo
-          workspace: GeoCategoryPlugin
+            - build_amplify_ios_spm
+      - unit_test:
+          name: ios_unit_test_geo
           scheme: AWSLocationGeoPlugin
+          sdk: iphonesimulator
+          destination: << pipeline.parameters.ios-destination >>
           requires:
-            - install_gems
-      - plugin_unit_test:
-          name: unit_test_core_ml
-          path: Predictions
-          workspace: PredictionsCategoryPlugin
-          scheme: CoreMLPredictionsPlugin
-          requires:
-            - install_gems
-      - plugin_unit_test:
-          name: unit_test_predictions
-          path: Predictions
-          workspace: PredictionsCategoryPlugin
-          scheme: AWSPredictionsPlugin
-          requires:
-            - install_gems
-      - plugin_unit_test:
-          name: unit_test_storage
-          path: Storage
-          workspace: StoragePlugin
+            - build_amplify_ios_spm
+      - unit_test:
+          name: ios_unit_test_storage
           scheme: AWSS3StoragePlugin
+          sdk: iphonesimulator
+          destination: << pipeline.parameters.ios-destination >>
           requires:
-            - install_gems
+            - build_amplify_ios_spm
+      - unit_test:
+          name: macos_unit_test_amplify
+          scheme: Amplify
+          sdk: macosx
+          destination: << pipeline.parameters.macos-destination >>
+          requires:
+            - build_amplify_macos_spm
+      - unit_test:
+          name: macos_unit_test_awspluginscore
+          scheme: AWSPluginsCore
+          sdk: macosx
+          destination: << pipeline.parameters.macos-destination >>
+          requires:
+            - build_amplify_macos_spm
+      - unit_test:
+          name: macos_unit_test_analytics
+          scheme: AWSPinpointAnalyticsPlugin
+          sdk: macosx
+          destination: << pipeline.parameters.macos-destination >>
+          requires:
+            - build_amplify_macos_spm
+      - unit_test:
+          name: macos_unit_test_api
+          scheme: AWSAPIPlugin
+          sdk: macosx
+          destination: << pipeline.parameters.macos-destination >>
+          requires:
+            - build_amplify_macos_spm
+      - unit_test:
+          name: macos_unit_test_auth
+          scheme: AWSCognitoAuthPlugin
+          sdk: macosx
+          destination: << pipeline.parameters.macos-destination >>
+          requires:
+            - build_amplify_macos_spm
+      - unit_test:
+          name: macos_unit_test_datastore
+          scheme: AWSDataStorePlugin
+          sdk: macosx
+          destination: << pipeline.parameters.macos-destination >>
+          requires:
+            - build_amplify_macos_spm
+      - unit_test:
+          name: macos_unit_test_geo
+          scheme: AWSLocationGeoPlugin
+          sdk: macosx
+          destination: << pipeline.parameters.macos-destination >>
+          requires:
+            - build_amplify_macos_spm
+      - unit_test:
+          name: macos_unit_test_storage
+          scheme: AWSS3StoragePlugin
+          sdk: macosx
+          destination: << pipeline.parameters.macos-destination >>
+          requires:
+            - build_amplify_macos_spm
       - deploy:
           name: deploy unstable
           <<: *deploy_requires
           filters:
             branches:
               only:
-                - main
+                - main 
       - deploy:
           name: deploy stable
           lane: release
@@ -342,4 +409,20 @@ workflows:
             branches:
               only:
                 - release
-          
+
+  # Scheduled smoke test workflow
+  # Jobs are pulled from the getting-started-smoke-test inline orb defined above
+  canaries:
+    when:
+      and:
+        - equal: [ scheduled_pipeline, << pipeline.trigger_source >> ]
+        - equal: [ "Canaries", << pipeline.schedule.name >> ]
+    jobs:
+      - getting-started-smoke-test/ios:
+          xcode-version: "14.1.0"
+          simulator-os-version: "16.1"
+          simulator-device: "iPhone 14 Pro"
+      - getting-started-smoke-test/ios:
+          xcode-version: "13.4.1"
+          simulator-os-version: "15.5"
+          simulator-device: "iPhone 13 Pro"

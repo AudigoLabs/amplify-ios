@@ -21,7 +21,7 @@ struct HubListenerTestUtilities {
                                 plugin: HubCategoryPlugin? = nil,
                                 timeout: TimeInterval,
                                 file: StaticString = #file,
-                                line: UInt = #line) throws -> Bool {
+                                line: UInt = #line) async throws -> Bool {
 
         let plugin = try plugin ?? Amplify.Hub.getPlugin(for: AWSHubPlugin.key)
 
@@ -33,11 +33,11 @@ struct HubListenerTestUtilities {
 
         let deadline = Date(timeIntervalSinceNow: timeout)
         while !hasListener && Date() < deadline {
-            if resolvedPlugin.hasListener(withToken: token) {
+            if await resolvedPlugin.hasListener(withToken: token) {
                 hasListener = true
                 break
             }
-            Thread.sleep(forTimeInterval: 0.01)
+            try? await Task.sleep(seconds: 0.01)
         }
 
         return hasListener

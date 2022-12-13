@@ -6,6 +6,7 @@
 //
 
 import Foundation
+import AuthenticationServices
 
 /// Request for sign out user
 public struct AuthSignOutRequest: AmplifyOperationRequest {
@@ -28,12 +29,27 @@ public extension AuthSignOutRequest {
         /// key/values
         public let pluginOptions: Any?
 
+        /// SignOut the user from all devices. Check the plugin specific definition on what global signOut means.
         public let globalSignOut: Bool
 
+        /// Provide a presentation anchor if you have signedIn using `signInWithWebUI`. The signOut webUI will be presented
+        /// in the presentation anchor provided.
+        public let presentationAnchorForWebUI: AuthUIPresentationAnchor?
+
         public init(globalSignOut: Bool = false,
+                    presentationAnchor: AuthUIPresentationAnchor? = nil,
                     pluginOptions: Any? = nil) {
             self.globalSignOut = globalSignOut
             self.pluginOptions = pluginOptions
+            self.presentationAnchorForWebUI = presentationAnchor
         }
+    }
+
+
+}
+
+extension AuthSignOutRequest.Options {
+    public static func presentationAnchor(_ anchor: AuthUIPresentationAnchor) -> AuthSignOutRequest.Options {
+        return AuthSignOutRequest.Options(presentationAnchor: anchor)
     }
 }

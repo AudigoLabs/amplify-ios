@@ -14,8 +14,8 @@ class GeoCategoryClientAPITests: XCTestCase {
     var geo: GeoCategory!
     var plugin: MockGeoCategoryPlugin!
 
-    override func setUp() {
-        Amplify.reset()
+    override func setUp() async throws {
+        await Amplify.reset()
         plugin = MockGeoCategoryPlugin()
         geo = Amplify.Geo
         let categoryConfiguration = GeoCategoryConfiguration(
@@ -34,57 +34,75 @@ class GeoCategoryClientAPITests: XCTestCase {
 
     }
 
-    func testSearchForText() throws {
+    func testSearchForText() async {
         let text = "test"
         let expectedMessage = "search(for text:\(text))"
-        let methodInvoked = expectation(description: "Expected method was invoked on plugin")
+        var expectedFunctionCalled = false
         plugin.listeners.append { message in
+            print(message)
             if message == expectedMessage {
-                methodInvoked.fulfill()
+                expectedFunctionCalled = true
             }
         }
-        geo.search(for: text) { _ in }
-        waitForExpectations(timeout: 1.0)
+        do {
+            _ = try await geo.search(for: text, options: nil)
+            XCTAssertTrue(expectedFunctionCalled)
+        } catch {
+            XCTFail("Error: \(error)")
+        }
     }
 
-    func testSearchForCoords() throws {
+    func testSearchForCoords() async {
         let coordinates = Geo.Coordinates(latitude: 0, longitude: 0)
         let expectedMessage = "search(for coordinates:\(coordinates))"
-        let methodInvoked = expectation(description: "Expected method was invoked on plugin")
+        var expectedFunctionCalled = false
         plugin.listeners.append { message in
+            print(message)
             if message == expectedMessage {
-                methodInvoked.fulfill()
+                expectedFunctionCalled = true
             }
         }
-        geo.search(for: coordinates) { _ in }
-        waitForExpectations(timeout: 1.0)
+        do {
+            _ = try await geo.search(for: coordinates, options: nil)
+            XCTAssertTrue(expectedFunctionCalled)
+        } catch {
+            XCTFail("Error: \(error)")
+        }
     }
 
-    func testGetAvailableMaps() throws {
+    func testGetAvailableMaps() async {
         let expectedMessage = "availableMaps"
-        let methodInvoked = expectation(description: "Expected method was invoked on plugin")
+        var expectedFunctionCalled = false
         plugin.listeners.append { message in
             print(message)
             if message == expectedMessage {
-                methodInvoked.fulfill()
+                expectedFunctionCalled = true
             }
         }
 
-        geo.availableMaps { _ in }
-        waitForExpectations(timeout: 1.0)
+        do {
+            _ = try await geo.availableMaps()
+            XCTAssertTrue(expectedFunctionCalled)
+        } catch {
+            XCTFail("Error: \(error)")
+        }
     }
 
-    func testGetDefaultMap() throws {
+    func testGetDefaultMap() async {
         let expectedMessage = "defaultMap"
-        let methodInvoked = expectation(description: "Expected method was invoked on plugin")
+        var expectedFunctionCalled = false
         plugin.listeners.append { message in
             print(message)
             if message == expectedMessage {
-                methodInvoked.fulfill()
+                expectedFunctionCalled = true
             }
         }
 
-        geo.defaultMap { _ in }
-        waitForExpectations(timeout: 1.0)
+        do {
+            _ = try await geo.defaultMap()
+            XCTAssertTrue(expectedFunctionCalled)
+        } catch {
+            XCTFail("Error: \(error)")
+        }
     }
 }

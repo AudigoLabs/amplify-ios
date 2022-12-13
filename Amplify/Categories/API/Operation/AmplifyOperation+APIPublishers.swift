@@ -5,25 +5,12 @@
 // SPDX-License-Identifier: Apache-2.0
 //
 
-import Combine
+#if canImport(Combine)
 import Foundation
-
-// MARK: - GraphQLOperation
-
-// The overrides require a feature and bugfix introduced in Swift 5.2
-#if swift(>=5.2)
-
-@available(iOS 13.0, *)
-public extension GraphQLOperation {
-    /// Publishes the final result of the operation
-    var resultPublisher: AnyPublisher<Success, Failure> {
-        internalResultPublisher
-    }
-}
+import Combine
 
 // MARK: - GraphQLSubscriptionOperation
 
-@available(iOS 13.0, *)
 public extension GraphQLSubscriptionOperation {
 
     /// Publishes the state of the GraphQL subscription's underlying network connection.
@@ -92,20 +79,6 @@ public extension GraphQLSubscriptionOperation {
             .eraseToAnyPublisher()
     }
 
-}
-
-// MARK: - RESTOperation
-
-@available(iOS 13.0, *)
-public extension AmplifyOperation
-    where
-    Request == RESTOperation.Request,
-    Success == RESTOperation.Success,
-    Failure == RESTOperation.Failure {
-    /// Publishes the final result of the operation
-    var resultPublisher: AnyPublisher<Success, Failure> {
-        internalResultPublisher
-    }
 }
 
 #endif

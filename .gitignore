@@ -16,6 +16,12 @@ Thumbs.db
 
 *.xcworkspace/
 !.swiftpm/xcode/package.xcworkspace
+!AmplifyPlugins/Analytics/Tests/AnalyticsHostApp/AnalyticsHostApp.xcodeproj/project.xcworkspace
+!AmplifyPlugins/Auth/Tests/AuthHostApp/AuthHostApp.xcodeproj/project.xcworkspace
+!AmplifyPlugins/DataStore/Tests/DataStoreHostApp/DataStoreHostApp.xcodeproj/project.xcworkspace
+!AmplifyPlugins/API/Tests/APIHostApp/APIHostApp.xcodeproj/project.xcworkspace
+!AmplifyPlugins/Storage/Tests/StorageHostApp/StorageHostApp.xcodeproj/project.xcworkspace
+!AmplifyPlugins/Geo/Tests/GeoHostApp/GeoHostApp.xcodeproj/project.xcworkspace
 Amplify.xcodeproj/xcuserdata
 Amplify.xcworkspace/xcuserdata
 xcuserdata
@@ -73,3 +79,11 @@ amplify-build-config.json
 amplify-gradle-config.json
 amplifytools.xcconfig
 .secret-*
+
+# Integ test configuration files
+RESTWithIAMIntegrationTests-amplifyconfiguration.json
+GraphQLModelBasedTests-amplifyconfiguration.json
+GraphQLWithIAMIntegrationTests-amplifyconfiguration.json
+GraphQLWithIAMIntegrationTests-credentials.json
+
+AWSDataStoreCategoryPluginIntegrationTests-amplifyconfiguration.json

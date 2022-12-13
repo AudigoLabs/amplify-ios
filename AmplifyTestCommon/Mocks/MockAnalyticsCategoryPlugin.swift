@@ -16,9 +16,8 @@ class MockAnalyticsCategoryPlugin: MessageReporter, AnalyticsCategoryPlugin {
         notify()
     }
 
-    func reset(onComplete: @escaping BasicClosure) {
+    func reset() {
         notify("reset")
-        onComplete()
     }
 
     func disable() {
@@ -29,7 +28,7 @@ class MockAnalyticsCategoryPlugin: MessageReporter, AnalyticsCategoryPlugin {
         notify()
     }
 
-    func identifyUser(_ identityId: String, withProfile analyticsUserProfile: AnalyticsUserProfile?) {
+    func identifyUser(userId identityId: String, userProfile analyticsUserProfile: AnalyticsUserProfile?) {
         notify("identifyUser(\(identityId))")
     }
 

@@ -48,16 +48,19 @@ open class AmplifyOperation<Request: AmplifyOperationRequest, Success, Failure: 
 
     private var resultListenerUnsubscribeToken: UnsubscribeToken?
 
-    /// Local storage for the result publisher associated with this operation. In iOS
-    /// 13 and higher, this is initialized to be a `Future<Success, Failure>`. We use a
+    /// Local storage for the result publisher associated with this operation. We use a
     /// Future here to ensure that a subscriber will always receive a value, even if
     /// the operation has already completed execution by the time the subscriber is
     /// attached. We derive the `resultPublisher` computed property from this value.
-    var resultFuture: Any
+    /// Amplify V2 can expect Combine to be available.
+#if canImport(Combine)
+    var resultFuture: Future<Success, Failure>!
 
     /// Local storage for the result promise associated with this operation. We use
     /// this promise handle to resolve the operation in the `dispatch` method
-    var resultPromise: Any
+    var resultPromise: Future<Success, Failure>.Promise!
+#endif
+
 
     /// Creates an AmplifyOperation for the specified reequest.
     ///
@@ -104,14 +107,11 @@ open class AmplifyOperation<Request: AmplifyOperationRequest, Success, Failure: 
         self.request = request
         self.id = UUID()
 
-        self.resultFuture = false
-        self.resultPromise = false
-
         super.init()
 
-        if #available(iOS 13.0, *) {
-            resultFuture = Future<Success, Failure> { self.resultPromise = $0 }
-        }
+#if canImport(Combine)
+        resultFuture = Future<Success, Failure> { self.resultPromise = $0 }
+#endif
 
         if let resultListener = resultListener {
             self.resultListenerUnsubscribeToken = subscribe(resultListener: resultListener)
@@ -146,14 +146,15 @@ open class AmplifyOperation<Request: AmplifyOperationRequest, Success, Failure: 
     /// Classes that override this method must emit a completion to the `resultPublisher` upon cancellation
     open override func cancel() {
         super.cancel()
-        if #available(iOS 13.0, *) {
-            let cancellationError = Failure(
-                errorDescription: "Operation cancelled",
-                recoverySuggestion: "The operation was cancelled before it completed",
-                error: OperationCancelledError()
-            )
-            publish(result: .failure(cancellationError))
-        }
+#if canImport(Combine)
+        let cancellationError = Failure(
+            errorDescription: "Operation cancelled",
+            recoverySuggestion: "The operation was cancelled before it completed",
+            error: OperationCancelledError()
+        )
+        publish(result: .failure(cancellationError))
+#endif
+        removeResultListener()
     }
 
     /// Dispatches an event to the hub. Internally, creates an
@@ -163,9 +164,9 @@ open class AmplifyOperation<Request: AmplifyOperationRequest, Success, Failure: 
     /// - Parameter result: The OperationResult to dispatch to the hub as part of the
     ///   HubPayload
     public func dispatch(result: OperationResult) {
-        if #available(iOS 13.0, *) {
-            publish(result: result)
-        }
+#if canImport(Combine)
+        publish(result: result)
+#endif
 
         let channel = HubChannel(from: categoryType)
         let context = AmplifyOperationContext(operationId: id, request: request)
@@ -178,7 +179,9 @@ open class AmplifyOperation<Request: AmplifyOperationRequest, Success, Failure: 
         guard let unsubscribeToken = resultListenerUnsubscribeToken else {
             return
         }
+
         Amplify.Hub.removeListener(unsubscribeToken)
+        resultListenerUnsubscribeToken = nil
     }
 
 }

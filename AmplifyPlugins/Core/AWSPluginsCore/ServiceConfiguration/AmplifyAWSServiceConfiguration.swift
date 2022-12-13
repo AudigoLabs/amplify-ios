@@ -6,49 +6,19 @@
 //
 
 import Foundation
-import AWSCore
+import AWSClientRuntime
 
-public class AmplifyAWSServiceConfiguration: AWSServiceConfiguration {
-    static let version = "1.23.0"
+public class AmplifyAWSServiceConfiguration {
+    public static let amplifyVersion = "2.2.0"
+    public static let platformName = "amplify-ios"
 
-    override public class func baseUserAgent() -> String! {
-        //TODO: Retrieve this version from a centralized location:
-        //https://github.com/aws-amplify/amplify-ios/issues/276
-        let platformInfo = AmplifyAWSServiceConfiguration.platformInformation()
-        let systemName = UIDevice.current.systemName.replacingOccurrences(of: " ", with: "-")
-        let systemVersion = UIDevice.current.systemVersion
-        let localeIdentifier = Locale.current.identifier
-        return "\(platformInfo) \(systemName)/\(systemVersion) \(localeIdentifier)"
-    }
+    public static func frameworkMetaData() -> FrameworkMetadata {
 
-    override public var userAgent: String {
-        return AmplifyAWSServiceConfiguration.baseUserAgent()
-    }
-
-    override public func copy(with zone: NSZone? = nil) -> Any {
-        return super.copy(with: zone)
-    }
-
-    override init() {
-        super.init(region: .Unknown, credentialsProvider: nil)
-    }
-
-    override public init(region regionType: AWSRegionType,
-                         credentialsProvider: AWSCredentialsProvider) {
-        super.init(region: regionType, credentialsProvider: credentialsProvider)
-    }
-
-    public init(region regionType: AWSRegionType) {
-        super.init(region: regionType, credentialsProvider: nil)
-    }
-
-    override public init(region regionType: AWSRegionType,
-                         endpoint: AWSEndpoint,
-                         credentialsProvider: AWSCredentialsProvider,
-                         localTestingEnabled: Bool) {
-        super.init(region: regionType,
-                   endpoint: endpoint,
-                   credentialsProvider: credentialsProvider,
-                   localTestingEnabled: localTestingEnabled)
+        guard let flutterVersion = platformMapping[Platform.flutter] else {
+            return FrameworkMetadata(name: platformName, version: amplifyVersion)
+        }
+        return FrameworkMetadata(name: Platform.flutter.rawValue,
+                                 version: flutterVersion,
+                                 extras: [platformName: amplifyVersion])
     }
 }

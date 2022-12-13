@@ -20,9 +20,8 @@ class MockDataStoreCategoryPlugin: MessageReporter, DataStoreCategoryPlugin {
         notify()
     }
 
-    func reset(onComplete: @escaping BasicClosure) {
+    func reset() {
         notify("reset")
-        onComplete()
     }
 
     func save<M: Model>(_ model: M,
@@ -37,6 +36,12 @@ class MockDataStoreCategoryPlugin: MessageReporter, DataStoreCategoryPlugin {
             }
         }
     }
+    
+    func save<M: Model>(_ model: M,
+                        where condition: QueryPredicate? = nil) async throws -> M {
+        notify("save")
+        return model
+    }
 
     func query<M: Model>(_ modelType: M.Type,
                          byId id: String,
@@ -49,6 +54,32 @@ class MockDataStoreCategoryPlugin: MessageReporter, DataStoreCategoryPlugin {
             }
         }
     }
+    
+    func query<M: Model>(_ modelType: M.Type,
+                         byId id: String) async throws -> M? {
+        notify("queryById")
+        return nil
+    }
+
+    func query<M: Model>(_ modelType: M.Type,
+                         byIdentifier id: String,
+                         completion: (DataStoreResult<M?>) -> Void) where M: ModelIdentifiable,
+                                                                          M.IdentifierFormat == ModelIdentifierFormat.Default {
+        notify("queryByIdentifier")
+
+        if let responder = responders[.queryByIdListener] as? QueryByIdResponder<M> {
+            if let callback = responder.callback((modelType: modelType, id: id)) {
+                completion(callback)
+            }
+        }
+    }
+    
+    func query<M: Model>(_ modelType: M.Type,
+                         byIdentifier id: String) async throws -> M? where M: ModelIdentifiable,
+        M.IdentifierFormat == ModelIdentifierFormat.Default {
+            notify("queryByIdentifier")
+            return nil
+    }
 
     func query<M: Model>(_ modelType: M.Type,
                          where predicate: QueryPredicate?,
@@ -58,13 +89,55 @@ class MockDataStoreCategoryPlugin: MessageReporter, DataStoreCategoryPlugin {
         notify("queryByPredicate")
 
         if let responder = responders[.queryModelsListener] as? QueryModelsResponder<M> {
-            if let callback = responder.callback((modelType: modelType,
+            if let result = responder.callback((modelType: modelType,
                                                   where: predicate,
                                                   sort: sortInput,
                                                   paginate: paginationInput)) {
-                completion(callback)
+                completion(result)
             }
         }
+    }
+    
+    func query<M: Model>(_ modelType: M.Type,
+                         where predicate: QueryPredicate?,
+                         sort sortInput: QuerySortInput?,
+                         paginate paginationInput: QueryPaginationInput?) async throws -> [M] {
+        notify("queryByPredicate")
+        
+        if let responder = responders[.queryModelsListener] as? QueryModelsResponder<M> {
+            if let result = responder.callback((modelType: modelType,
+                                                  where: predicate,
+                                                  sort: sortInput,
+                                                  paginate: paginationInput)) {
+                switch result {
+                case .success(let models):
+                    return models
+                case .failure(let error):
+                    throw error
+                }
+            }
+        }
+        
+        return []
+    }
+
+    func query<M>(_ modelType: M.Type,
+                  byIdentifier id: ModelIdentifier<M, M.IdentifierFormat>,
+                  completion: (DataStoreResult<M?>) -> Void) where M: Model, M: ModelIdentifiable {
+        notify("queryWithIdentifier")
+
+       if let responder = responders[.queryByIdListener] as? QueryByIdResponder<M> {
+           if let callback = responder.callback((modelType: modelType, id: id.stringValue)) {
+               completion(callback)
+           }
+       }
+    }
+    
+    func query<M>(_ modelType: M.Type,
+                  byIdentifier id: ModelIdentifier<M, M.IdentifierFormat>) async throws -> M?
+        where M: Model, M: ModelIdentifiable {
+            notify("queryWithIdentifier")
+            return nil
     }
 
     func delete<M: Model>(_ modelType: M.Type,
@@ -79,10 +152,56 @@ class MockDataStoreCategoryPlugin: MessageReporter, DataStoreCategoryPlugin {
             }
         }
     }
+    
+    func delete<M: Model>(_ modelType: M.Type,
+                          withId id: String,
+                          where predicate: QueryPredicate? = nil) async throws {
+        notify("deleteById")
+    }
 
     func delete<M: Model>(_ modelType: M.Type,
-                          where predicate: QueryPredicate,
-                          completion: (DataStoreResult<Void>) -> Void) {
+                          withIdentifier id: String,
+                          where predicate: QueryPredicate? = nil,
+                          completion: @escaping (DataStoreResult<Void>) -> Void) where M: ModelIdentifiable,
+                                                                             M.IdentifierFormat == ModelIdentifierFormat.Default {
+        notify("deleteByIdentifier")
+
+        if let responder = responders[.deleteByIdListener] as? DeleteByIdResponder<M> {
+            if let callback = responder.callback((modelType: modelType, id: id)) {
+                completion(callback)
+            }
+        }
+    }
+
+    func delete<M: Model>(_ modelType: M.Type,
+                          withIdentifier id: String,
+                          where predicate: QueryPredicate? = nil) async throws
+        where M: ModelIdentifiable, M.IdentifierFormat == ModelIdentifierFormat.Default {
+            notify("deleteByIdentifier")
+    }
+    
+    func delete<M>(_ modelType: M.Type,
+                   withIdentifier id: ModelIdentifier<M, M.IdentifierFormat>,
+                   where predicate: QueryPredicate?,
+                   completion: @escaping DataStoreCallback<Void>) where M: Model, M: ModelIdentifiable {
+        notify("deleteByIdentifier")
+
+        if let responder = responders[.deleteByIdListener] as? DeleteByIdResponder<M> {
+            if let callback = responder.callback((modelType: modelType, id: id.stringValue)) {
+                completion(callback)
+            }
+        }
+    }
+
+    func delete<M>(_ modelType: M.Type,
+                   withIdentifier id: ModelIdentifier<M, M.IdentifierFormat>,
+                   where predicate: QueryPredicate?) async throws where M: Model, M: ModelIdentifiable {
+        notify("deleteByIdentifier")
+    }
+    
+    func delete<M: Model>(_ modelType: M.Type,
+                           where predicate: QueryPredicate,
+                           completion: (DataStoreResult<Void>) -> Void) {
         notify("deleteModelTypeByPredicate")
 
         if let responder = responders[.deleteModelTypeListener] as? DeleteModelTypeResponder<M> {
@@ -90,6 +209,11 @@ class MockDataStoreCategoryPlugin: MessageReporter, DataStoreCategoryPlugin {
                 completion(callback)
             }
         }
+    }
+    
+    func delete<M: Model>(_ modelType: M.Type,
+                           where predicate: QueryPredicate) async throws {
+        notify("deleteModelTypeByPredicate")
     }
 
     func delete<M: Model>(_ model: M,
@@ -104,6 +228,11 @@ class MockDataStoreCategoryPlugin: MessageReporter, DataStoreCategoryPlugin {
             }
         }
     }
+    
+    func delete<M: Model>(_ model: M,
+                          where predicate: QueryPredicate? = nil) async throws {
+        notify("deleteByPredicate")
+    }
 
     func clear(completion: @escaping DataStoreCallback<Void>) {
         notify("clear")
@@ -114,6 +243,10 @@ class MockDataStoreCategoryPlugin: MessageReporter, DataStoreCategoryPlugin {
             }
         }
     }
+    
+    func clear() async throws {
+        notify("clear")
+    }
 
     func start(completion: @escaping DataStoreCallback<Void>) {
         notify("start")
@@ -123,6 +256,10 @@ class MockDataStoreCategoryPlugin: MessageReporter, DataStoreCategoryPlugin {
                 completion(callback)
             }
         }
+    }
+    
+    func start() async throws {
+        notify("start")
     }
 
     func stop(completion: @escaping DataStoreCallback<Void>) {
@@ -135,7 +272,10 @@ class MockDataStoreCategoryPlugin: MessageReporter, DataStoreCategoryPlugin {
         }
     }
 
-    @available(iOS 13.0, *)
+    func stop() async throws {
+        notify("stop")
+    }
+    
     func publisher<M: Model>(for modelType: M.Type)
     -> AnyPublisher<MutationEvent, DataStoreError> {
         let mutationEvent = MutationEvent(id: "testevent",
@@ -148,7 +288,10 @@ class MockDataStoreCategoryPlugin: MessageReporter, DataStoreCategoryPlugin {
         return Result.Publisher(mutationEvent).eraseToAnyPublisher()
     }
 
-    @available(iOS 13.0, *)
+    func observe<M: Model>(_ modelType: M.Type) -> AmplifyAsyncThrowingSequence<MutationEvent> {
+        return AmplifyAsyncThrowingSequence(parent: nil)
+    }
+    
     public func observeQuery<M: Model>(for modelType: M.Type,
                                        where predicate: QueryPredicate? = nil,
                                        sort sortInput: QuerySortInput? = nil)
@@ -157,10 +300,47 @@ class MockDataStoreCategoryPlugin: MessageReporter, DataStoreCategoryPlugin {
         let snapshot = DataStoreQuerySnapshot<M>(items: [], isSynced: false)
         return Result.Publisher(snapshot).eraseToAnyPublisher()
     }
+    
+    func observeQuery<M: Model>(for modelType: M.Type,
+                                where predicate: QueryPredicate?,
+                                sort sortInput: QuerySortInput?) -> AmplifyAsyncThrowingSequence<DataStoreQuerySnapshot<M>> {
+        
+        let request = ObserveQueryRequest(options: [])
+        let taskRunner = MockObserveQueryTaskRunner<M>(request: request)
+        return taskRunner.sequence
+    }
 }
 
 class MockSecondDataStoreCategoryPlugin: MockDataStoreCategoryPlugin {
     override var key: String {
         return "MockSecondDataStoreCategoryPlugin"
     }
+}
+
+
+class ObserveQueryRequest: AmplifyOperationRequest {
+    var options: Any
+    
+    typealias Options = Any
+    
+    init(options: Any) {
+        self.options = options
+    }
+    
+}
+
+class MockObserveQueryTaskRunner<M: Model>: InternalTaskRunner, InternalTaskAsyncThrowingSequence, InternalTaskThrowingChannel {
+
+    public typealias Request = ObserveQueryRequest
+    public typealias InProcess = DataStoreQuerySnapshot<M>
+    public var request: ObserveQueryRequest
+    public var context = InternalTaskAsyncThrowingSequenceContext<DataStoreQuerySnapshot<M>>()
+    func run() async throws {
+
+    }
+
+    init(request: ObserveQueryRequest) {
+        self.request = request
+    }
+
 }

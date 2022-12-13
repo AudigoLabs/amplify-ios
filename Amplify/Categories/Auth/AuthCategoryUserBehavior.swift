@@ -11,51 +11,36 @@ public protocol AuthCategoryUserBehavior: AnyObject {
 
     /// Returns the currently logged in user.
     ///
-    func getCurrentUser() -> AuthUser?
+    func getCurrentUser() async throws -> AuthUser
 
     /// Fetch user attributes for the current user.
     ///
     /// - Parameters:
     ///   - options: Parameters specific to plugin behavior
-    ///   - listener: Triggered when the operation completes.
-    @discardableResult
-    func fetchUserAttributes(options: AuthFetchUserAttributeOperation.Request.Options?,
-                             listener: AuthFetchUserAttributeOperation.ResultListener?)
-        -> AuthFetchUserAttributeOperation
+    func fetchUserAttributes(options: AuthFetchUserAttributesRequest.Options?) async throws -> [AuthUserAttribute]
 
     /// Update user attribute for the current user
     ///
     /// - Parameters:
     ///   - userAttribute: Attribute that need to be updated
     ///   - options: Parameters specific to plugin behavior
-    ///   - listener: Triggered when the operation completes.
-    @discardableResult
-    func update(userAttribute: AuthUserAttribute,
-                options: AuthUpdateUserAttributeOperation.Request.Options?,
-                listener: AuthUpdateUserAttributeOperation.ResultListener?) -> AuthUpdateUserAttributeOperation
+    func update(userAttribute: AuthUserAttribute, options: AuthUpdateUserAttributeRequest.Options?) async throws -> AuthUpdateAttributeResult
 
     /// Update a list of user attributes for the current user
     ///
     /// - Parameters:
     ///   - userAttributes: List of attribtues that need ot be updated
     ///   - options: Parameters specific to plugin behavior
-    ///   - listener: Triggered when the operation completes.
-    @discardableResult
     func update(userAttributes: [AuthUserAttribute],
-                options: AuthUpdateUserAttributesOperation.Request.Options?,
-                listener: AuthUpdateUserAttributesOperation.ResultListener?) -> AuthUpdateUserAttributesOperation
+                options: AuthUpdateUserAttributesRequest.Options?) async throws -> [AuthUserAttributeKey: AuthUpdateAttributeResult]
 
     /// Resends the confirmation code required to verify an attribute
     ///
     /// - Parameters:
-    ///   - attributeKey: Attribute to be verified
+    ///   - userAttributeKey: Attribute to be verified
     ///   - options: Parameters specific to plugin behavior
-    ///   - listener: Triggered when the operation completes.
-    @discardableResult
-    func resendConfirmationCode(for attributeKey: AuthUserAttributeKey,
-                                options: AuthAttributeResendConfirmationCodeOperation.Request.Options?,
-                                listener: AuthAttributeResendConfirmationCodeOperation.ResultListener?)
-        -> AuthAttributeResendConfirmationCodeOperation
+    func resendConfirmationCode(forUserAttributeKey userAttributeKey: AuthUserAttributeKey,
+                                options: AuthAttributeResendConfirmationCodeRequest.Options?) async throws -> AuthCodeDeliveryDetails
 
     /// Confirm an attribute using confirmation code
     ///
@@ -63,12 +48,7 @@ public protocol AuthCategoryUserBehavior: AnyObject {
     ///   - userAttribute: Attribute to verify
     ///   - confirmationCode: Confirmation code received
     ///   - options: Parameters specific to plugin behavior
-    ///   - listener: Triggered when the operation completes.
-    @discardableResult
-    func confirm(userAttribute: AuthUserAttributeKey,
-                 confirmationCode: String,
-                 options: AuthConfirmUserAttributeOperation.Request.Options?,
-                 listener: AuthConfirmUserAttributeOperation.ResultListener?) -> AuthConfirmUserAttributeOperation
+    func confirm(userAttribute: AuthUserAttributeKey, confirmationCode: String, options: AuthConfirmUserAttributeRequest.Options?) async throws
 
     /// Update the current logged in user's password
     ///
@@ -77,10 +57,5 @@ public protocol AuthCategoryUserBehavior: AnyObject {
     ///   - oldPassword: Current password of the user
     ///   - newPassword: New password to be updated
     ///   - options: Parameters specific to plugin behavior
-    ///   - listener: Triggered when the operation completes.
-    @discardableResult
-    func update(oldPassword: String,
-                to newPassword: String,
-                options: AuthChangePasswordOperation.Request.Options?,
-                listener: AuthChangePasswordOperation.ResultListener?) -> AuthChangePasswordOperation
+    func update(oldPassword: String, to newPassword: String, options: AuthChangePasswordRequest.Options?) async throws
 }

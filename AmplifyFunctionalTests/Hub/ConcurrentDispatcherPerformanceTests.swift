@@ -11,12 +11,12 @@ import XCTest
 // Removing this test case since it's not actually used in the default hub plugin. Leaving the commented case in place
 // in case we want to re-enable to test specific use cases.
 
-//class ConcurrentDispatcherPerformanceTests: XCTestCase {
+// class ConcurrentDispatcherPerformanceTests: XCTestCase {
 //
 //    let dispatcherTypeUnderTest = ConcurrentDispatcher.self
 //
-//    override func setUp() {
-//        Amplify.reset()
+//    override func setUp() async throws {
+//        await Amplify.reset()
 //        let config = AmplifyConfiguration()
 //        do {
 //            try Amplify.configure(config)
@@ -25,8 +25,8 @@ import XCTest
 //        }
 //    }
 //
-//    override func tearDown() {
-//        Amplify.reset()
+//    override func tearDown() async throws {
+//        await Amplify.reset()
 //    }
 //
 //    // MARK: - Performance of single channel, multiple listeners
@@ -215,4 +215,4 @@ import XCTest
 //        }
 //    }
 //
-//}
+// }

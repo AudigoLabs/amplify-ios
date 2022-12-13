@@ -6,7 +6,6 @@
 //
 
 import XCTest
-import AmplifyPlugins
 import AWSPredictionsPlugin
 import AWSCore
 
@@ -15,7 +14,7 @@ import AWSCore
 
 class AWSPredictionsPluginTestBase: XCTestCase {
 
-    let networkTimeout = TimeInterval(10) // 180 seconds to wait before network timeouts
+    let networkTimeout = TimeInterval(20) // 20 seconds to wait before network timeouts
     let amplifyConfigurationFile = "testconfiguration/AWSPredictionsPluginIntegrationTests-amplifyconfiguration"
 
     override func setUp() {
@@ -38,6 +37,6 @@ class AWSPredictionsPluginTestBase: XCTestCase {
     override func tearDown() {
         sleep(1)
         print("Amplify reset")
-        Amplify.reset()
+        await Amplify.reset()
     }
 }

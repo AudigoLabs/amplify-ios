@@ -18,8 +18,8 @@ class DefaultHubPluginConcurrencyTests: XCTestCase {
         return plugin
     }
 
-    override func setUp() {
-        Amplify.reset()
+    override func setUp() async throws {
+        await Amplify.reset()
         let config = AmplifyConfiguration()
         do {
             try Amplify.configure(config)
@@ -28,8 +28,8 @@ class DefaultHubPluginConcurrencyTests: XCTestCase {
         }
     }
 
-    override func tearDown() {
-        Amplify.reset()
+    override func tearDown() async throws {
+        await Amplify.reset()
     }
 
     /// Given: The default configuration
@@ -38,7 +38,7 @@ class DefaultHubPluginConcurrencyTests: XCTestCase {
     /// - ...to multiple channels
     /// - ...to multiple subscribers
     /// Then: All messages are delivered, to the correct listeners
-    func testConcurrentMessageDelivery() throws {
+    func testConcurrentMessageDelivery() async throws {
         let channelCount = 10
         let listenersPerChannel = 50
         let messagesExpectedPerListener = 10
@@ -61,23 +61,25 @@ class DefaultHubPluginConcurrencyTests: XCTestCase {
                     messageReceived.fulfill()
                 }
 
-                guard try HubListenerTestUtilities.waitForListener(with: token, plugin: plugin, timeout: 1.0) else {
+                guard try await HubListenerTestUtilities.waitForListener(with: token, plugin: plugin, timeout: 1.0) else {
                     XCTFail("Listener \(listenerIteration) on channel \(channel) not registered")
                     return
                 }
                 messagesReceived.append(messageReceived)
             }
         }
+        
+        let capturedChannels = channels
 
         DispatchQueue.concurrentPerform(iterations: channels.count) { iteration in
-            let channel = channels[iteration]
+            let channel = capturedChannels[iteration]
             for messageIteration in 0 ..< messagesExpectedPerListener {
                 let payload = HubPayload(eventName: "Message \(messageIteration), channel \(channel)")
                 plugin.dispatch(to: channel, payload: payload)
             }
         }
 
-        wait(for: messagesReceived, timeout: 5.0)
+        await waitForExpectations(timeout: 5.0)
     }
 
 }

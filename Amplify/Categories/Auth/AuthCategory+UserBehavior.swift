@@ -9,69 +9,38 @@ import Foundation
 
 extension AuthCategory: AuthCategoryUserBehavior {
 
-    public func getCurrentUser() -> AuthUser? {
-        return plugin.getCurrentUser()
+    public func getCurrentUser() async throws -> AuthUser {
+        try await plugin.getCurrentUser()
     }
 
-    @discardableResult
-    public func fetchUserAttributes(options: AuthFetchUserAttributeOperation.Request.Options? = nil,
-                                    listener: AuthFetchUserAttributeOperation.ResultListener?)
-        -> AuthFetchUserAttributeOperation {
-            return plugin.fetchUserAttributes(options: options,
-                                              listener: listener)
+    public func fetchUserAttributes(options: AuthFetchUserAttributesRequest.Options? = nil) async throws -> [AuthUserAttribute] {
+        try await plugin.fetchUserAttributes(options: options)
     }
 
-    @discardableResult
-    public func update(userAttribute: AuthUserAttribute,
-                       options: AuthUpdateUserAttributeOperation.Request.Options? = nil,
-                       listener: AuthUpdateUserAttributeOperation.ResultListener?) -> AuthUpdateUserAttributeOperation {
-        return plugin.update(userAttribute: userAttribute,
-                             options: options,
-                             listener: listener)
+    public func update(userAttribute: AuthUserAttribute, options: AuthUpdateUserAttributeRequest.Options? = nil) async throws -> AuthUpdateAttributeResult {
+        try await plugin.update(userAttribute: userAttribute, options: options)
     }
 
-    @discardableResult
     public func update(userAttributes: [AuthUserAttribute],
-                       options: AuthUpdateUserAttributesOperation.Request.Options? = nil,
-                       listener: AuthUpdateUserAttributesOperation.ResultListener?)
-        -> AuthUpdateUserAttributesOperation {
-            return plugin.update(userAttributes: userAttributes,
-                                 options: options,
-                                 listener: listener)
+                       options: AuthUpdateUserAttributesRequest.Options? = nil)
+        async throws -> [AuthUserAttributeKey: AuthUpdateAttributeResult] {
+            try await plugin.update(userAttributes: userAttributes, options: options)
     }
 
-    @discardableResult
-    public func resendConfirmationCode(for attributeKey: AuthUserAttributeKey,
-                                       options: AuthAttributeResendConfirmationCodeOperation.Request.Options? = nil,
-                                       listener: AuthAttributeResendConfirmationCodeOperation.ResultListener?)
-        -> AuthAttributeResendConfirmationCodeOperation {
-            return plugin.resendConfirmationCode(for: attributeKey,
-                                                 options: options,
-                                                 listener: listener)
+    public func resendConfirmationCode(forUserAttributeKey userAttributeKey: AuthUserAttributeKey,
+                                       options: AuthAttributeResendConfirmationCodeRequest.Options? = nil) async throws -> AuthCodeDeliveryDetails {
+        try await plugin.resendConfirmationCode(forUserAttributeKey: userAttributeKey, options: options)
 
     }
 
-    @discardableResult
     public func confirm(userAttribute: AuthUserAttributeKey,
                         confirmationCode: String,
-                        options: AuthConfirmUserAttributeOperation.Request.Options? = nil,
-                        listener: AuthConfirmUserAttributeOperation.ResultListener?)
-        -> AuthConfirmUserAttributeOperation {
-            return plugin.confirm(userAttribute: userAttribute,
-                                  confirmationCode: confirmationCode,
-                                  options: options,
-                                  listener: listener)
+                        options: AuthConfirmUserAttributeRequest.Options? = nil) async throws {
+        try await plugin.confirm(userAttribute: userAttribute, confirmationCode: confirmationCode, options: options)
     }
 
-    @discardableResult
-    public func update(oldPassword: String,
-                       to newPassword: String,
-                       options: AuthChangePasswordOperation.Request.Options? = nil,
-                       listener: AuthChangePasswordOperation.ResultListener?) -> AuthChangePasswordOperation {
-        return plugin.update(oldPassword: oldPassword,
-                             to: newPassword,
-                             options: options,
-                             listener: listener)
+    public func update(oldPassword: String, to newPassword: String, options: AuthChangePasswordRequest.Options? = nil) async throws {
+        try await plugin.update(oldPassword: oldPassword, to: newPassword, options: options)
     }
 
 }

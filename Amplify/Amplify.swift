@@ -5,6 +5,8 @@
 // SPDX-License-Identifier: Apache-2.0
 //
 
+import Foundation
+
 /// At its core, the Amplify class is simply a router that provides clients top-level access to categories and
 /// configuration methods. It provides convenient access to default plugins via the top-level category properties,
 /// but clients can access specific plugins by invoking `getPlugin` on a category and issuing methods directly to
@@ -26,7 +28,7 @@ public class Amplify {
     // It is not supported to mutate these category properties. They are `var` to support the `reset()` method for
     // ease of testing.
     public static internal(set) var Analytics = AnalyticsCategory()
-    public static internal(set) var API: APICategory = AmplifyAPICategory()
+    public static internal(set) var API: APICategory = APICategory()
     public static internal(set) var Auth = AuthCategory()
     public static internal(set) var DataStore = DataStoreCategory()
     public static internal(set) var Geo = GeoCategory()

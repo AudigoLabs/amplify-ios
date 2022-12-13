@@ -11,8 +11,8 @@ import XCTest
 @testable import AmplifyTestCommon
 
 class GeoCategoryConfigurationTests: XCTestCase {
-    override func setUp() {
-        Amplify.reset()
+    override func setUp() async throws {
+        await Amplify.reset()
     }
 
     func testCanAddGeoPlugin() throws {
@@ -36,7 +36,7 @@ class GeoCategoryConfigurationTests: XCTestCase {
         XCTAssertNotNil(try Amplify.Geo.getPlugin(for: "MockGeoCategoryPlugin"))
     }
 
-    func testCanResetGeoPlugin() throws {
+    func testCanResetGeoPlugin() async throws {
         let plugin = MockGeoCategoryPlugin()
         let resetWasInvoked = expectation(description: "reset() was invoked")
         plugin.listeners.append { message in
@@ -53,11 +53,11 @@ class GeoCategoryConfigurationTests: XCTestCase {
         let amplifyConfig = AmplifyConfiguration(geo: geoConfig)
 
         try Amplify.configure(amplifyConfig)
-        Amplify.reset()
-        waitForExpectations(timeout: 1.0)
+        await Amplify.reset()
+        await waitForExpectations(timeout: 1.0)
     }
 
-    func testResetRemovesAddedPlugin() throws {
+    func testResetRemovesAddedPlugin() async throws {
         let plugin = MockGeoCategoryPlugin()
         try Amplify.add(plugin: plugin)
 
@@ -68,7 +68,7 @@ class GeoCategoryConfigurationTests: XCTestCase {
         let amplifyConfig = AmplifyConfiguration(geo: geoConfig)
 
         try Amplify.configure(amplifyConfig)
-        Amplify.reset()
+        await Amplify.reset()
         XCTAssertThrowsError(try Amplify.Geo.getPlugin(for: "MockGeoCategoryPlugin"),
                              "Getting a plugin after reset() should throw") { error in
             guard case Geo.Error.invalidConfiguration = error else {
@@ -100,12 +100,12 @@ class GeoCategoryConfigurationTests: XCTestCase {
         XCTAssertNotNil(try Amplify.Geo.getPlugin(for: "MockSecondGeoCategoryPlugin"))
     }
 
-    func testCanUseDefaultPluginIfOnlyOnePlugin() throws {
+    func testCanUseDefaultPluginIfOnlyOnePlugin() async throws {
         let plugin = MockGeoCategoryPlugin()
-        let methodInvokedOnDefaultPlugin = expectation(description: "test method invoked on default plugin")
+        var methodInvokedOnDefaultPlugin = false
         plugin.listeners.append { message in
             if message == "search(for text:test)" {
-                methodInvokedOnDefaultPlugin.fulfill()
+                methodInvokedOnDefaultPlugin = true
             }
         }
         try Amplify.add(plugin: plugin)
@@ -116,12 +116,11 @@ class GeoCategoryConfigurationTests: XCTestCase {
 
         try Amplify.configure(amplifyConfig)
 
-        Amplify.Geo.search(for: "test") { _ in }
-
-        waitForExpectations(timeout: 1.0)
+        _ = try await Amplify.Geo.search(for: "test", options: nil)
+        XCTAssertTrue(methodInvokedOnDefaultPlugin)
     }
 
-    func testPreconditionFailureInvokingWithMultiplePlugins() throws {
+    func testPreconditionFailureInvokingWithMultiplePlugins() async throws {
         let plugin1 = MockGeoCategoryPlugin()
         try Amplify.add(plugin: plugin1)
 
@@ -136,32 +135,28 @@ class GeoCategoryConfigurationTests: XCTestCase {
         )
 
         let amplifyConfig = AmplifyConfiguration(geo: geoConfig)
-
         try Amplify.configure(amplifyConfig)
 
-        try XCTAssertThrowFatalError {
-            Amplify.Geo.search(for: "test") { _ in }
-        }
+        let registry = TypeRegistry.register(type: GeoCategoryPlugin.self) { _ in MockGeoCategoryPlugin() }
+        _ = try await Amplify.Geo.search(for: "test", options: nil)
+        XCTAssertGreaterThan(registry.messages.count, 0)
     }
 
-    func testCanUseSpecifiedPlugin() throws {
+    func testCanUseSpecifiedPlugin() async throws {
         let plugin1 = MockGeoCategoryPlugin()
-        let methodShouldNotBeInvokedOnDefaultPlugin =
-            expectation(description: "test method should not be invoked on default plugin")
-        methodShouldNotBeInvokedOnDefaultPlugin.isInverted = true
+        var methodInvokedOnDefaultPlugin = false
         plugin1.listeners.append { message in
             if message == "search(for text:test)" {
-                methodShouldNotBeInvokedOnDefaultPlugin.fulfill()
+                methodInvokedOnDefaultPlugin = true
             }
         }
         try Amplify.add(plugin: plugin1)
 
         let plugin2 = MockSecondGeoCategoryPlugin()
-        let methodShouldBeInvokedOnSecondPlugin =
-            expectation(description: "test method should be invoked on second plugin")
+        var methodInvokedOnSecondPlugin = false
         plugin2.listeners.append { message in
             if message == "search(for text:test)" {
-                methodShouldBeInvokedOnSecondPlugin.fulfill()
+                methodInvokedOnSecondPlugin = true
             }
         }
         try Amplify.add(plugin: plugin2)
@@ -176,9 +171,10 @@ class GeoCategoryConfigurationTests: XCTestCase {
         let amplifyConfig = AmplifyConfiguration(geo: geoConfig)
 
         try Amplify.configure(amplifyConfig)
-        try Amplify.Geo.getPlugin(for: "MockSecondGeoCategoryPlugin")
-            .search(for: "test", options: nil) { _ in }
-        waitForExpectations(timeout: 1.0)
+        _ = try await Amplify.Geo.getPlugin(for: "MockSecondGeoCategoryPlugin").search(for: "test", options: nil)
+
+        XCTAssertFalse(methodInvokedOnDefaultPlugin)
+        XCTAssertTrue(methodInvokedOnSecondPlugin)
     }
 
     func testCanConfigurePluginDirectly() throws {
@@ -212,14 +208,14 @@ class GeoCategoryConfigurationTests: XCTestCase {
         waitForExpectations(timeout: 1.0)
     }
 
-    func testPreconditionFailureInvokingBeforeConfig() throws {
+    func testPreconditionFailureInvokingBeforeConfig() async throws {
         let plugin = MockGeoCategoryPlugin()
         try Amplify.add(plugin: plugin)
 
+        let registry = TypeRegistry.register(type: GeoCategoryPlugin.self) { _ in plugin }
         // Remember, this test must be invoked with a category that doesn't include an Amplify-supplied default plugin
-        try XCTAssertThrowFatalError {
-            Amplify.Geo.search(for: "test") { _ in }
-        }
+        _ = try await Amplify.Geo.search(for: "test", options: nil)
+        XCTAssertGreaterThan(registry.messages.count, 0)
     }
 
     // MARK: - Test internal config behavior guarantees
@@ -241,7 +237,7 @@ class GeoCategoryConfigurationTests: XCTestCase {
         }
     }
 
-    func testCanConfigureAfterReset() throws {
+    func testCanConfigureAfterReset() async throws {
         let plugin = MockGeoCategoryPlugin()
         try Amplify.add(plugin: plugin)
         let categoryConfig = GeoCategoryConfiguration(
@@ -250,11 +246,7 @@ class GeoCategoryConfigurationTests: XCTestCase {
 
         try Amplify.Geo.configure(using: categoryConfig)
 
-        let exp = expectation(description: #function)
-        Amplify.Geo.reset {
-            exp.fulfill()
-        }
-        wait(for: [exp], timeout: 1.0)
+        await Amplify.Geo.reset()
 
         XCTAssertNoThrow(try Amplify.Geo.configure(using: categoryConfig))
     }

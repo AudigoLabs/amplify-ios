@@ -7,7 +7,7 @@
 
 import XCTest
 
-// Only @testable so we can get access to `Amplify.reset()`
+// Only @testable so we can get access to `await Amplify.reset()`
 @testable import Amplify
 
 @testable import AmplifyTestCommon
@@ -15,8 +15,8 @@ import XCTest
 class APICategoryClientRESTTests: XCTestCase {
     var mockAmplifyConfig: AmplifyConfiguration!
 
-    override func setUp() {
-        Amplify.reset()
+    override func setUp() async throws {
+        await Amplify.reset()
 
         let apiConfig = APICategoryConfiguration(
             plugins: ["MockAPICategoryPlugin": true]
@@ -25,7 +25,7 @@ class APICategoryClientRESTTests: XCTestCase {
         mockAmplifyConfig = AmplifyConfiguration(api: apiConfig)
     }
 
-    func testGet() throws {
+    func testGet() async throws {
         let plugin = try makeAndAddMockPlugin()
         let methodWasInvokedOnPlugin = expectation(description: "method was invoked on plugin")
         plugin.listeners.append { message in
@@ -34,9 +34,14 @@ class APICategoryClientRESTTests: XCTestCase {
             }
         }
 
-        Amplify.API.get(request: RESTRequest()) { _ in }
-
-        waitForExpectations(timeout: 0.5)
+        let getCompleted = asyncExpectation(description: "get completed")
+        Task {
+            _ = try await Amplify.API.get(request: RESTRequest())
+            await getCompleted.fulfill()
+        }
+        await waitForExpectations([getCompleted], timeout: 0.5)
+        
+        await waitForExpectations(timeout: 0.5)
     }
 
     // MARK: - Utilities

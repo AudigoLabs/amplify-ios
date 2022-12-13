@@ -17,7 +17,7 @@ class ListTests: XCTestCase {
     }
 
     struct BasicModel: Model {
-        var id: Identifier
+        var id: String
     }
 
     class MockListDecoder: ModelListDecoder {
@@ -46,29 +46,46 @@ class ListTests: XCTestCase {
     class MockListProvider<Element: Model>: ModelListProvider {
         let elements: [Element]
         var error: CoreError?
+        var errorOnLoad: CoreError?
+        var errorOnNextPage: CoreError?
         var nextPage: List<Element>?
-
+        var state: ModelListProviderState<Element>?
+        
         public init(elements: [Element] = [Element](),
                     error: CoreError? = nil,
-                    nextPage: List<Element>? = nil) {
+                    errorOnLoad: CoreError? = nil,
+                    errorOnNextPage: CoreError? = nil,
+                    nextPage: List<Element>? = nil,
+                    state: ModelListProviderState<Element>? = nil) {
             self.elements = elements
             self.error = error
+            self.errorOnLoad = errorOnLoad
+            self.errorOnNextPage = errorOnNextPage
             self.nextPage = nextPage
+            self.state = state
         }
 
-        public func load() -> Result<[Element], CoreError> {
-            if let error = error {
-                return .failure(error)
-            } else {
-                return .success(elements)
-            }
+        public func getState() -> ModelListProviderState<Element> {
+            state ?? .notLoaded
         }
-
+        
         public func load(completion: (Result<[Element], CoreError>) -> Void) {
             if let error = error {
                 completion(.failure(error))
+            } else if let error = errorOnLoad {
+                completion(.failure(error))
             } else {
                 completion(.success(elements))
+            }
+        }
+        
+        public func load() async throws -> [Element] {
+            if let error = error {
+                throw error
+            } else if let error = errorOnLoad {
+                throw error
+            } else {
+                return elements
             }
         }
 
@@ -79,8 +96,22 @@ class ListTests: XCTestCase {
         public func getNextPage(completion: (Result<List<Element>, CoreError>) -> Void) {
             if let error = error {
                 completion(.failure(error))
+            } else if let error = errorOnNextPage {
+                completion(.failure(error))
             } else if let nextPage = nextPage {
                 completion(.success(nextPage))
+            } else {
+                fatalError("Mock not implemented")
+            }
+        }
+        
+        public func getNextPage() async throws -> List<Element> {
+            if let error = error {
+                throw error
+            } else if let error = errorOnNextPage {
+                throw error
+            } else if let nextPage = nextPage {
+                return nextPage
             } else {
                 fatalError("Mock not implemented")
             }
@@ -93,7 +124,7 @@ class ListTests: XCTestCase {
         XCTAssertEqual(ModelListDecoderRegistry.listDecoders.get().count, 1)
     }
 
-    func testDecodeWithMockListDecoder() throws {
+    func testDecodeWithMockListDecoder() async throws {
         ModelListDecoderRegistry.registerDecoder(MockListDecoder.self)
         XCTAssertEqual(ModelListDecoderRegistry.listDecoders.get().count, 1)
         let data: JSONValue = [
@@ -103,6 +134,13 @@ class ListTests: XCTestCase {
 
         let serializedData = try ListTests.encode(json: data)
         let list = try ListTests.decode(serializedData, responseType: BasicModel.self)
+        let fetchSuccess = asyncExpectation(description: "fetch successful")
+        Task {
+            try await list.fetch()
+            await fetchSuccess.fulfill()
+        }
+        await waitForExpectations([fetchSuccess], timeout: 1.0)
+        
         XCTAssertEqual(list.count, 2)
         XCTAssertEqual(list.startIndex, 0)
         XCTAssertEqual(list.endIndex, 2)
@@ -120,7 +158,7 @@ class ListTests: XCTestCase {
             """)
     }
 
-    func testDecodeWithArrayLiteralListProvider() throws {
+    func testDecodeWithArrayLiteralListProvider() async throws {
         XCTAssertEqual(ModelListDecoderRegistry.listDecoders.get().count, 0)
         let data: JSONValue = [
             ["id": "1"],
@@ -130,6 +168,12 @@ class ListTests: XCTestCase {
         let serializedData = try ListTests.encode(json: data)
         let list = try ListTests.decode(serializedData, responseType: BasicModel.self)
         XCTAssertNotNil(list)
+        let fetchSuccess = asyncExpectation(description: "fetch successful")
+        Task {
+            try await list.fetch()
+            await fetchSuccess.fulfill()
+        }
+        await waitForExpectations([fetchSuccess], timeout: 1.0)
         XCTAssertEqual(list.count, 2)
         XCTAssertEqual(list.startIndex, 0)
         XCTAssertEqual(list.endIndex, 2)
@@ -140,204 +184,53 @@ class ListTests: XCTestCase {
         list.makeIterator().forEach { _ in
             iterateSuccess.fulfill()
         }
-        wait(for: [iterateSuccess], timeout: 1)
+        await waitForExpectations(timeout: 1)
         XCTAssertFalse(list.listProvider.hasNextPage())
-        let getNextPageFail = expectation(description: "getNextPage should fail")
-        list.listProvider.getNextPage { result in
-            switch result {
-            case .success:
-                XCTFail("Should not be successfully")
-            case .failure:
-                getNextPageFail.fulfill()
-            }
+        do {
+            _ = try await list.listProvider.getNextPage()
+            XCTFail("Should have failed")
+        } catch {
+            XCTAssertNotNil(error)
         }
-        wait(for: [getNextPageFail], timeout: 1)
     }
 
-    func testDecodeAndEncodeEmptyArray() throws {
+    func testDecodeAndEncodeEmptyArray() async throws {
         XCTAssertEqual(ModelListDecoderRegistry.listDecoders.get().count, 0)
         let data: JSONValue = []
         let serializedData = try ListTests.encode(json: data)
         let list = try ListTests.decode(serializedData, responseType: BasicModel.self)
         XCTAssertNotNil(list)
+        let fetchSuccess = asyncExpectation(description: "fetch successful")
+        Task {
+            try await list.fetch()
+            await fetchSuccess.fulfill()
+        }
+        await waitForExpectations([fetchSuccess], timeout: 1.0)
         XCTAssertEqual(list.count, 0)
         let json = try? ListTests.toJSON(list: list)
         XCTAssertEqual(json, "[]")
     }
 
-    func testLoadWithCompletion() throws {
-        XCTAssertEqual(ModelListDecoderRegistry.listDecoders.get().count, 0)
-        let data: JSONValue = [
-            ["id": "1"],
-            ["id": "2"]
-        ]
-
-        let serializedData = try ListTests.encode(json: data)
-        let list = try ListTests.decode(serializedData, responseType: BasicModel.self)
-        guard case .notLoaded = list.loadedState else {
-            XCTFail("Should not be loaded")
-            return
-        }
-        let loadComplete = expectation(description: "Load completed")
-        list.load { result in
-            switch result {
-            case .success(let elements):
-                XCTAssertEqual(elements.count, 2)
-                loadComplete.fulfill()
-            case .failure(let dataStoreError):
-                XCTFail("\(dataStoreError)")
-            }
-        }
-        wait(for: [loadComplete], timeout: 1)
-        guard case .loaded = list.loadedState else {
-            XCTFail("Should be loaded")
-            return
-        }
-        let loadedStateLoadComplete = expectation(description: "Load when in Loaded state completed")
-        list.load { result in
-            switch result {
-            case .success(let elements):
-                XCTAssertEqual(elements.count, 2)
-                loadedStateLoadComplete.fulfill()
-            case .failure(let dataStoreError):
-                XCTFail("\(dataStoreError)")
-            }
-        }
-        wait(for: [loadedStateLoadComplete], timeout: 1)
-    }
-
-    func testLoadWithCompletionWhenUnderlyingDataStoreError_InternalOperationFailure() {
+    func testLoadFailure() async throws {
         let mockListProvider = MockListProvider<BasicModel>(
-            elements: [BasicModel](),
-            error: .listOperation("", "", DataStoreError.internalOperation("", "", nil))).eraseToAnyModelListProvider()
-        let list = List(listProvider: mockListProvider)
-        let loadComplete = expectation(description: "Load completed")
-        list.load { result in
-            switch result {
-            case .failure(let error):
-                guard case .internalOperation = error else {
-                    XCTFail("error should be DataStore Error")
-                    return
-                }
-                loadComplete.fulfill()
-            case .success:
-                XCTFail("Should have failed")
-            }
-        }
-        wait(for: [loadComplete], timeout: 1)
-    }
-
-    func testListLoadWithCompletionWhenListOperationError_InvalidOperationFailure() {
-        let mockListProvider = MockListProvider<BasicModel>(
-            elements: [BasicModel](),
-            error: .listOperation("", "", nil)).eraseToAnyModelListProvider()
-        let list = List(listProvider: mockListProvider)
-        let loadComplete = expectation(description: "Load completed")
-        list.load { result in
-            switch result {
-            case .failure(let error):
-                guard case .invalidOperation = error else {
-                    XCTFail("error should be DataStoreError.invalidOperation")
-                    return
-                }
-                loadComplete.fulfill()
-            case .success:
-                XCTFail("Should have failed")
-            }
-        }
-        wait(for: [loadComplete], timeout: 1)
-    }
-
-    func testListLoadWithCompletionWhenClientValidationError_InvalidOperationFailure() {
-        let mockListProvider = MockListProvider<BasicModel>(
-            elements: [BasicModel](),
-            error: .clientValidation("", "", nil)).eraseToAnyModelListProvider()
-        let list = List(listProvider: mockListProvider)
-        let loadComplete = expectation(description: "Load completed")
-        list.load { result in
-            switch result {
-            case .failure(let error):
-                guard case .invalidOperation = error else {
-                    XCTFail("error should be DataStoreError.invalidOperation")
-                    return
-                }
-                loadComplete.fulfill()
-            case .success:
-                XCTFail("Should have failed")
-            }
-        }
-        wait(for: [loadComplete], timeout: 1)
-    }
-
-    func testListLoadWithCompletionWhenUnknownError_InvalidOperationFailure() {
-        let mockListProvider = MockListProvider<BasicModel>(
-            elements: [BasicModel](),
-            error: .listOperation("", "", nil)).eraseToAnyModelListProvider()
-        let list = List(listProvider: mockListProvider)
-        let loadComplete = expectation(description: "Load completed")
-        list.load { result in
-            switch result {
-            case .failure(let error):
-                guard case .invalidOperation = error else {
-                    XCTFail("error should be DataStoreError.invalidOperation")
-                    return
-                }
-                loadComplete.fulfill()
-            case .success:
-                XCTFail("Should have failed")
-            }
-        }
-        wait(for: [loadComplete], timeout: 1)
-    }
-
-    func testImplicitLoadFailure() {
-        let mockListProvider = MockListProvider<BasicModel>(
-            elements: [BasicModel](),
-            error: .listOperation("", "", DataStoreError.internalOperation("", "", nil)))
+            errorOnLoad: .listOperation("", "", DataStoreError.internalOperation("", "", nil)))
             .eraseToAnyModelListProvider()
         let list = List(listProvider: mockListProvider)
         guard case .notLoaded = list.loadedState else {
             XCTFail("Should not be loaded")
             return
         }
-        XCTAssertEqual(list.count, 0)
-        guard case .notLoaded = list.loadedState else {
-            XCTFail("Should not be loaded")
-            return
+        let fetchCompleted = asyncExpectation(description: "fetch completed")
+        Task {
+            do {
+                _ = try await list.fetch()
+                XCTFail("Should have caught error")
+            } catch {
+                XCTAssertNotNil(error)
+            }
+            await fetchCompleted.fulfill()
         }
-    }
-
-    func testSynchronousLoadSuccess() throws {
-        XCTAssertEqual(ModelListDecoderRegistry.listDecoders.get().count, 0)
-        let data: JSONValue = [
-            ["id": "1"],
-            ["id": "2"]
-        ]
-
-        let serializedData = try ListTests.encode(json: data)
-        let list = try ListTests.decode(serializedData, responseType: BasicModel.self)
-        guard case .notLoaded = list.loadedState else {
-            XCTFail("Should not be loaded")
-            return
-        }
-        list.load()
-        XCTAssertEqual(list.count, 2)
-        guard case .loaded = list.loadedState else {
-            XCTFail("Should be loaded")
-            return
-        }
-        list.load()
-        XCTAssertEqual(list.count, 2)
-    }
-
-    func testSynchronousLoadFailWithAssert() throws {
-        let mockListProvider = MockListProvider<BasicModel>(
-            elements: [BasicModel](),
-            error: .listOperation("", "", nil)).eraseToAnyModelListProvider()
-        let list = List(listProvider: mockListProvider)
-        try XCTAssertThrowFatalError {
-            list.load()
-        }
+        await waitForExpectations([fetchCompleted], timeout: 1.0)
     }
 
     // MARK: - Helpers
