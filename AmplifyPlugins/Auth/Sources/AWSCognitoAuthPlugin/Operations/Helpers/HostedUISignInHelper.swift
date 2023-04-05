@@ -8,7 +8,7 @@
 import Foundation
 import Amplify
 
-struct HostedUISignInHelper {
+struct HostedUISignInHelper: DefaultLogger {
 
     let request: AuthWebUISignInRequest
 
@@ -26,49 +26,31 @@ struct HostedUISignInHelper {
 
     func initiateSignIn() async throws -> AuthSignInResult {
         try await isValidState()
-        await prepareForSignIn()
+        log.verbose("Start signIn flow")
         return try await doSignIn()
     }
 
     func isValidState() async throws {
         let stateSequences = await authStateMachine.listen()
+        log.verbose("Wait for a valid state")
         for await state in stateSequences {
             guard case .configured(let authenticationState, _) = state else {
                 continue
             }
             switch authenticationState {
             case .signingIn:
-                continue
+                await sendCancelSignInEvent()
             case .signedIn:
                 throw AuthError.invalidState(
                     "There is already a user in signedIn state. SignOut the user first before calling signIn",
                     AuthPluginErrorConstants.invalidStateError, nil)
-            default:
-                return
-            }
-        }
-    }
-
-    private func prepareForSignIn() async {
-
-        let stateSequences = await authStateMachine.listen()
-
-        for await state in stateSequences {
-            guard case .configured(let authNState, _) = state else { continue }
-
-            switch authNState {
             case .signedOut:
                 return
-
-            case .signingIn:
-                Task {
-                    await sendCancelSignInEvent()
-                }
-            default:
-                continue
+            default: continue
             }
         }
     }
+
 
     private func doSignIn() async throws -> AuthSignInResult {
 
@@ -90,6 +72,7 @@ struct HostedUISignInHelper {
         }
         let stateSequences = await authStateMachine.listen()
         await sendSignInEvent(oauthConfiguration: oauthConfiguration)
+        log.verbose("Wait for signIn to complete")
         for await state in stateSequences {
             guard case .configured(let authNState,
                                    let authZState) = state else { continue }
@@ -101,13 +84,19 @@ struct HostedUISignInHelper {
                 }
 
             case .error(let error):
-                throw AuthError.unknown("Sign in reached an error state", error)
+                await waitForSignInCancel()
+                throw error.authError
 
             case .signingIn(let signInState):
-                guard let result = try UserPoolSignInHelper.checkNextStep(signInState) else {
-                    continue
+                do {
+                    guard let result = try UserPoolSignInHelper.checkNextStep(signInState) else {
+                        continue
+                    }
+                    return result
+                } catch {
+                    await waitForSignInCancel()
+                    throw error
                 }
-                return result
             default:
                 continue
             }
@@ -141,4 +130,21 @@ struct HostedUISignInHelper {
         await authStateMachine.send(event)
     }
 
+    private func waitForSignInCancel() async {
+        log.verbose("Sending cancel signIn")
+        await sendCancelSignInEvent()
+        log.verbose("Wait for signIn to cancel")
+        let stateSequences = await authStateMachine.listen()
+        for await state in stateSequences {
+            guard case .configured(let authenticationState, _) = state else {
+                continue
+            }
+
+            switch authenticationState {
+            case .signedOut:
+                return
+            default: continue
+            }
+        }
+    }
 }

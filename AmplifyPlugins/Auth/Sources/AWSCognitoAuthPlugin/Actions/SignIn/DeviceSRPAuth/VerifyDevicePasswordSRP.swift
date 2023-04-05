@@ -33,12 +33,19 @@ struct VerifyDevicePasswordSRP: Action {
             let secretBlock = try secretBlock(secretBlockString)
             let serverPublicB = try serverPublic(parameters)
 
-            guard case .metadata(let deviceData) = stateData.deviceMetadata else {
+            let asfDeviceId = try await CognitoUserPoolASF.asfDeviceID(
+                for: username,
+                credentialStoreClient: environment.authEnvironment().credentialsClient)
+
+            let deviceMetadata = await DeviceMetadataHelper.getDeviceMetadata(
+                for: username,
+                with: environment)
+            guard
+                case .metadata(let deviceData) = deviceMetadata
+            else {
                 let authError = SignInError.service(error: SRPError.calculation)
                 logVerbose("\(#fileID) DevciceSRPSignInError \(authError)", environment: environment)
-                let event = SignInEvent(
-                    eventType: .throwPasswordVerifierError(authError)
-                )
+                let event = SignInEvent(eventType: .throwPasswordVerifierError(authError))
                 await dispatcher.send(event)
                 return
             }
@@ -58,6 +65,8 @@ struct VerifyDevicePasswordSRP: Action {
                 session: authResponse.session,
                 secretBlock: secretBlockString,
                 signature: signature,
+                deviceMetadata: deviceMetadata,
+                asfDeviceId: asfDeviceId,
                 environment: userPoolEnv)
 
             let responseEvent = try await UserPoolSignInHelper.sendRespondToAuth(

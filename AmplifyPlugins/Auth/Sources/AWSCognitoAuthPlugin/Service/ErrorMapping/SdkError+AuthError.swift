@@ -48,6 +48,9 @@ extension SdkError: AuthErrorConvertible {
 
         case .pathCreationFailed(let message):
             return AuthError.service(message, "", clientError)
+            
+        case .queryItemCreationFailed(let message):
+            return AuthError.service(message, "", clientError)
 
         case .serializationFailed(let message):
             return AuthError.service(message, "", clientError)
@@ -67,17 +70,67 @@ extension SdkError: AuthErrorConvertible {
             if let authError = error as? AuthErrorConvertible {
                 return authError.authError
             } else {
-                return AuthError.service(error.localizedDescription,
-                                         "",
-                                         AWSCognitoAuthError.network)
+                return AuthError.service(
+                    error.localizedDescription,
+                    """
+                    Check your network connection, retry when the network is available.
+                    HTTP Response stauts code: \(String(describing: httpResponse?.statusCode))
+                    """,
+                    AWSCognitoAuthError.network)
 
             }
 
         case .unknownError(let message):
             return AuthError.unknown(message, clientError)
-        @unknown default:
-            return .unknown("Unknown service error occurred")
         }
     }
 
+}
+
+extension Error {
+    func internalAWSServiceError<E>() -> E? {
+        if let internalError = self as? E {
+            return internalError
+        }
+
+        if let sdkError = self as? SdkError<E> {
+            return sdkError.internalAWSServiceError()
+        }
+        return nil
+    }
+}
+
+extension SdkError {
+
+    func internalAWSServiceError<E>() -> E? {
+        switch self {
+
+        case .service(let error, _):
+            if let serviceError = error as? E {
+                return serviceError
+            }
+
+        case .client(let clientError, _):
+            return clientError.internalAWSServiceError()
+
+        default: break
+
+        }
+        return nil
+    }
+}
+
+extension ClientError {
+
+    func internalAWSServiceError<E>() -> E? {
+        switch self {
+        case .retryError(let retryError):
+            if let sdkError = retryError as? SdkError<E> {
+                return sdkError.internalAWSServiceError()
+            }
+
+        default: break
+        }
+        return nil
+    }
 }

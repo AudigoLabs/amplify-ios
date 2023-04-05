@@ -89,7 +89,9 @@ extension AWSCognitoAuthPlugin: AuthCategoryBehavior {
         let options = options ?? AuthConfirmSignInRequest.Options()
         let request = AuthConfirmSignInRequest(challengeResponse: challengeResponse,
                                                options: options)
-        let task = AWSAuthConfirmSignInTask(request, stateMachine: authStateMachine)
+        let task = AWSAuthConfirmSignInTask(request,
+                                            stateMachine: authStateMachine,
+                                            configuration: authConfiguration)
         return try await taskQueue.sync {
             return try await task.value
         } as! AuthSignInResult
@@ -157,7 +159,9 @@ extension AWSCognitoAuthPlugin: AuthCategoryBehavior {
     }
 
     public func deleteUser() async throws {
-        let task = AWSAuthDeleteUserTask(authStateMachine: self.authStateMachine)
+        let task = AWSAuthDeleteUserTask(
+            authStateMachine: self.authStateMachine,
+            authConfiguraiton: authConfiguration)
         _ = try await taskQueue.sync {
             return try await task.value
         }

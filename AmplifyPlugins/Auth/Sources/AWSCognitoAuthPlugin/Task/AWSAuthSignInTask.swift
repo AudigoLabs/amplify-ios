@@ -8,7 +8,7 @@ import Foundation
 import Amplify
 import AWSPluginsCore
 
-class AWSAuthSignInTask: AuthSignInTask {
+class AWSAuthSignInTask: AuthSignInTask, DefaultLogger {
 
     private let request: AuthSignInRequest
     private let authStateMachine: AuthStateMachine
@@ -29,22 +29,35 @@ class AWSAuthSignInTask: AuthSignInTask {
     }
 
     func execute() async throws -> AuthSignInResult {
+        log.verbose("Starting execution")
+        await taskHelper.didStateMachineConfigured()
+        //Check if we have a user pool configuration
         guard let userPoolConfiguration = authConfiguration.getUserPoolConfiguration() else {
             let message = AuthPluginErrorConstants.configurationError
-            let authError = AuthenticationError.configuration(message: message)
+            let authError = AuthError.configuration(
+                "Could not find user pool configuration",
+                message)
             throw authError
         }
 
-        await taskHelper.didStateMachineConfigured()
         try await validateCurrentState()
 
         let authflowType = authFlowType(userPoolConfiguration: userPoolConfiguration)
-        return try await doSignIn(authflowType: authflowType)
+        do {
+            log.verbose("Signing with \(authflowType)")
+           let result = try await doSignIn(authflowType: authflowType)
+            log.verbose("Received result")
+            return result
+        } catch {
+            await waitForSignInCancel()
+            throw error
+        }
     }
 
     private func validateCurrentState() async throws {
 
         let stateSequences = await authStateMachine.listen()
+        log.verbose("Validating current state")
         for await state in stateSequences {
             guard case .configured(let authenticationState, _) = state else {
                 continue
@@ -56,6 +69,9 @@ class AWSAuthSignInTask: AuthSignInTask {
                     "There is already a user in signedIn state. SignOut the user first before calling signIn",
                     AuthPluginErrorConstants.invalidStateError, nil)
                 throw error
+            case .signingIn:
+                log.verbose("Cancelling existing signIn flow")
+                await sendCancelSignInEvent()
             case .signedOut:
                 return
             default: continue
@@ -65,7 +81,9 @@ class AWSAuthSignInTask: AuthSignInTask {
 
     private func doSignIn(authflowType: AuthFlowType) async throws -> AuthSignInResult {
         let stateSequences = await authStateMachine.listen()
+        log.verbose("Sending signIn event")
         await sendSignInEvent(authflowType: authflowType)
+        log.verbose("Waiting for signin to complete")
         for await state in stateSequences {
             guard case .configured(let authNState,
                                    let authZState) = state else { continue }
@@ -76,6 +94,7 @@ class AWSAuthSignInTask: AuthSignInTask {
                 if case .sessionEstablished = authZState {
                     return AuthSignInResult(nextStep: .done)
                 } else if case .error(let error) = authZState {
+                    log.verbose("Authorization reached an error state \(error)")
                     let error = AuthError.unknown("Sign in reached an error state", error)
                     throw error
                 }
@@ -92,6 +111,27 @@ class AWSAuthSignInTask: AuthSignInTask {
             }
         }
         throw AuthError.unknown("Sign in reached an error state")
+    }
+
+    private func sendCancelSignInEvent() async {
+        let event = AuthenticationEvent(eventType: .cancelSignIn)
+        await authStateMachine.send(event)
+    }
+
+    private func waitForSignInCancel() async {
+        await sendCancelSignInEvent()
+        let stateSequences = await authStateMachine.listen()
+        log.verbose("Wait for signIn to cancel")
+        for await state in stateSequences {
+            guard case .configured(let authenticationState, _) = state else {
+                continue
+            }
+            switch authenticationState {
+            case .signedOut:
+                return
+            default: continue
+            }
+        }
     }
 
     private func sendSignInEvent(authflowType: AuthFlowType) async {

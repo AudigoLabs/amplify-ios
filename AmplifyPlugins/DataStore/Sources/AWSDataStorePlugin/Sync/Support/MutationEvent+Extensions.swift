@@ -40,8 +40,9 @@ extension MutationEvent {
                                                       storageAdapter: StorageEngineAdapter,
                                                       completion: @escaping DataStoreCallback<Void>) {
         MutationEvent.pendingMutationEvents(
-            for: mutationEvent.modelId,
-            storageAdapter: storageAdapter) { queryResult in
+            forMutationEvent: mutationEvent,
+            storageAdapter: storageAdapter
+        ) { queryResult in
             switch queryResult {
             case .failure(let dataStoreError):
                 completion(.failure(dataStoreError))
@@ -58,7 +59,7 @@ extension MutationEvent {
                     return
                 }
 
-                storageAdapter.save(reconciledEvent, condition: nil) { result in
+                storageAdapter.save(reconciledEvent, condition: nil, eagerLoad: true) { result in
                     switch result {
                     case .failure(let dataStoreError):
                         completion(.failure(dataStoreError))

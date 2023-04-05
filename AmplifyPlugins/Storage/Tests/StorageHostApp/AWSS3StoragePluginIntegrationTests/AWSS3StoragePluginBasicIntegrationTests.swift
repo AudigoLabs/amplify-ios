@@ -8,22 +8,32 @@
 import XCTest
 @testable import Amplify
 import AWSS3StoragePlugin
-import var CommonCrypto.CC_MD5_DIGEST_LENGTH
-import func CommonCrypto.CC_MD5
-import typealias CommonCrypto.CC_LONG
+import CryptoKit
 
 class AWSS3StoragePluginBasicIntegrationTests: AWSS3StoragePluginTestBase {
+
+    var uploadedKeys: [String]!
+
+    override func setUp() async throws {
+        try await super.setUp()
+        uploadedKeys = []
+    }
+
+    override func tearDown() async throws {
+        for key in uploadedKeys {
+            await self.remove(key: key)
+        }
+        uploadedKeys = nil
+        try await super.tearDown()
+    }
 
     /// Given: An data object
     /// When: Upload the data
     /// Then: The operation completes successfully
-    func testUploadData() async {
+    func testUploadData() async throws {
         let key = UUID().uuidString
         let data = key.data(using: .utf8)!
-        let completeInvoked = asyncExpectation(description: "Completed is invoked")
-        await wait(with: completeInvoked) {
-            return try await Amplify.Storage.uploadData(key: key, data: data, options: nil).value
-        }
+        _ = try await Amplify.Storage.uploadData(key: key, data: data, options: nil).value
         
         // Remove the key
         await remove(key: key)
@@ -32,14 +42,11 @@ class AWSS3StoragePluginBasicIntegrationTests: AWSS3StoragePluginTestBase {
     /// Given: A empty data object
     /// When: Upload the data
     /// Then: The operation completes successfully
-    func testUploadEmptyData() async {
+    func testUploadEmptyData() async throws {
         let key = UUID().uuidString
         let data = "".data(using: .utf8)!
-        let completeInvoked = asyncExpectation(description: "Completed is invoked")
-        await wait(with: completeInvoked) {
-            return try await Amplify.Storage.uploadData(key: key, data: data, options: nil).value
-        }
-        
+        _ = try await Amplify.Storage.uploadData(key: key, data: data, options: nil).value
+
         // Remove the key
         await remove(key: key)
     }
@@ -47,17 +54,14 @@ class AWSS3StoragePluginBasicIntegrationTests: AWSS3StoragePluginTestBase {
     /// Given: A file with contents
     /// When: Upload the file
     /// Then: The operation completes successfully
-    func testUploadFile() async {
+    func testUploadFile() async throws {
         let key = UUID().uuidString
         let filePath = NSTemporaryDirectory() + key + ".tmp"
 
         let fileURL = URL(fileURLWithPath: filePath)
         FileManager.default.createFile(atPath: filePath, contents: key.data(using: .utf8), attributes: nil)
 
-        let completeInvoked = asyncExpectation(description: "Completed is invoked")
-        await wait(with: completeInvoked) {
-            return try await Amplify.Storage.uploadFile(key: key, local: fileURL, options: nil).value
-        }
+        _ = try await Amplify.Storage.uploadFile(key: key, local: fileURL, options: nil).value
         // Remove the key
         await remove(key: key)
     }
@@ -65,16 +69,13 @@ class AWSS3StoragePluginBasicIntegrationTests: AWSS3StoragePluginTestBase {
     /// Given: A file with empty contents
     /// When: Upload the file
     /// Then: The operation completes successfully
-    func testUploadFileEmptyData() async {
+    func testUploadFileEmptyData() async throws {
         let key = UUID().uuidString
         let filePath = NSTemporaryDirectory() + key + ".tmp"
         let fileURL = URL(fileURLWithPath: filePath)
         FileManager.default.createFile(atPath: filePath, contents: "".data(using: .utf8), attributes: nil)
 
-        let completeInvoked = asyncExpectation(description: "Completed is invoked")
-        await wait(with: completeInvoked) {
-            return try await Amplify.Storage.uploadFile(key: key, local: fileURL, options: nil).value
-        }
+        _ = try await Amplify.Storage.uploadFile(key: key, local: fileURL, options: nil).value
         // Remove the key
         await remove(key: key)
     }
@@ -82,35 +83,21 @@ class AWSS3StoragePluginBasicIntegrationTests: AWSS3StoragePluginTestBase {
     /// Given: A large  data object
     /// When: Upload the data
     /// Then: The operation completes successfully
-    func testUploadLargeData() async {
+    func testUploadLargeData() async throws {
         let key = UUID().uuidString
 
-        let done = asyncExpectation(description: "done")
-        Task {
-            do {
-                let uploadKey = try await Amplify.Storage.uploadData(key: key,
-                                                            data: AWSS3StoragePluginTestBase.largeDataObject,
-                                                            options: nil).value
-                XCTAssertEqual(uploadKey, key)
-            } catch {
-                XCTFail("Error: \(error)")
-            }
-            await done.fulfill()
-        }
-        await waitForExpectations([done], timeout: TestCommonConstants.networkTimeout)
+        let uploadKey = try await Amplify.Storage.uploadData(key: key,
+                                                             data: AWSS3StoragePluginTestBase.largeDataObject,
+                                                             options: nil).value
+        XCTAssertEqual(uploadKey, key)
 
-        let removeDone = asyncExpectation(description: "remove done")
-        Task {
-            try await Amplify.Storage.remove(key: key)
-            await removeDone.fulfill()
-        }
-        await waitForExpectations([removeDone], timeout: TestCommonConstants.networkTimeout)
+        try await Amplify.Storage.remove(key: key)
     }
 
     /// Given: A large file
     /// When: Upload the file
     /// Then: The operation completes successfully
-    func testUploadLargeFile() async {
+    func testUploadLargeFile() async throws {
         let key = UUID().uuidString
         let filePath = NSTemporaryDirectory() + key + ".tmp"
         let fileURL = URL(fileURLWithPath: filePath)
@@ -119,10 +106,7 @@ class AWSS3StoragePluginBasicIntegrationTests: AWSS3StoragePluginTestBase {
                                        contents: AWSS3StoragePluginTestBase.largeDataObject,
                                        attributes: nil)
 
-        let completeInvoked = asyncExpectation(description: "Completed is invoked")
-        await wait(with: completeInvoked, timeout: 600) {
-            return try await Amplify.Storage.uploadFile(key: key, local: fileURL, options: nil).value
-        }
+        _ = try await Amplify.Storage.uploadFile(key: key, local: fileURL, options: nil).value
         // Remove the key
         await remove(key: key)
     }
@@ -130,13 +114,10 @@ class AWSS3StoragePluginBasicIntegrationTests: AWSS3StoragePluginTestBase {
     /// Given: An object in storage
     /// When: Call the downloadData API
     /// Then: The operation completes successfully with the data retrieved
-    func testDownloadDataToMemory() async {
+    func testDownloadDataToMemory() async throws {
         let key = UUID().uuidString
         await uploadData(key: key, data: key.data(using: .utf8)!)
-        let completeInvoked = asyncExpectation(description: "Completed is invoked")
-        await wait(with: completeInvoked) {
-            return try await Amplify.Storage.downloadData(key: key, options: .init()).value
-        }
+        _ = try await Amplify.Storage.downloadData(key: key, options: .init()).value
         // Remove the key
         await remove(key: key)
     }
@@ -144,7 +125,7 @@ class AWSS3StoragePluginBasicIntegrationTests: AWSS3StoragePluginTestBase {
     /// Given: An object in storage
     /// When: Call the downloadFile API
     /// Then: The operation completes successfully the local file containing the data from the object
-    func testDownloadFile() async {
+    func testDownloadFile() async throws {
         let key = UUID().uuidString
         let timestamp = String(Date().timeIntervalSince1970)
         let timestampData = timestamp.data(using: .utf8)!
@@ -153,10 +134,7 @@ class AWSS3StoragePluginBasicIntegrationTests: AWSS3StoragePluginTestBase {
         let fileURL = URL(fileURLWithPath: filePath)
         removeIfExists(fileURL)
 
-        let completeInvoked = asyncExpectation(description: "Completed is invoked")
-        await wait(with: completeInvoked) {
-            return try await Amplify.Storage.downloadFile(key: key, local: fileURL, options: .init()).value
-        }
+        _ = try await Amplify.Storage.downloadFile(key: key, local: fileURL, options: .init()).value
 
         let fileExists = FileManager.default.fileExists(atPath: fileURL.path)
         XCTAssertTrue(fileExists)
@@ -174,7 +152,7 @@ class AWSS3StoragePluginBasicIntegrationTests: AWSS3StoragePluginTestBase {
     /// Given: An object in storage
     /// When: Call the getURL API
     /// Then: The operation completes successfully with the URL retrieved
-    func testGetRemoteURL() async {
+    func testGetRemoteURL() async throws {
         let key = UUID().uuidString
         await uploadData(key: key, dataString: key)
 
@@ -218,57 +196,89 @@ class AWSS3StoragePluginBasicIntegrationTests: AWSS3StoragePluginTestBase {
     /// Given: An object in storage
     /// When: Call the list API
     /// Then: The operation completes successfully with the key retrieved
-    func testListFromPublic() async {
+    func testListFromPublic() async throws {
         let key = UUID().uuidString
-        let expectedMD5Hex = "\"\(MD5(string: key).map { String(format: "%02hhx", $0) }.joined())\""
+        let expectedMD5Hex = "\"\(key.md5())\""
         await uploadData(key: key, dataString: key)
-        let completeInvoked = asyncExpectation(description: "Completed is invoked")
         let options = StorageListRequest.Options(accessLevel: .guest,
                                                  targetIdentityId: nil,
                                                  path: key)
-        let result = await wait(with: completeInvoked) {
-            return try await Amplify.Storage.list(options: options)
-        }
+        let result = try await Amplify.Storage.list(options: options)
+        let items = try XCTUnwrap(result.items)
 
-        guard let items = result?.items else {
-            XCTFail("Failed to list items")
-            return
-        }
+        XCTAssertEqual(items.count, 1, String(describing: items))
+        let item = try XCTUnwrap(items.first)
+        XCTAssertEqual(item.key, key)
+        XCTAssertNotNil(item.eTag)
+        XCTAssertEqual(item.eTag, expectedMD5Hex)
+        XCTAssertNotNil(item.lastModified)
+        XCTAssertNotNil(item.size)
 
-        XCTAssertEqual(items.count, 1)
-        if let item = items.first {
-            XCTAssertEqual(item.key, key)
-            XCTAssertNotNil(item.eTag)
-            XCTAssertEqual(item.eTag, expectedMD5Hex)
-            XCTAssertNotNil(item.lastModified)
-            XCTAssertNotNil(item.size)
-        }
-        
         // Remove the key
         await remove(key: key)
     }
 
-    /// Given: No object in storage for the key
-    /// When: Call the list API
-    /// Then: The operation completes successfully with empty list of keys returned
-    func testListEmpty() async {
-        let key = UUID().uuidString
-        let completeInvoked = asyncExpectation(description: "Completed is invoked")
-        let options = StorageListRequest.Options(accessLevel: .guest,
-                                                 targetIdentityId: nil,
-                                                 path: key)
-        let result = await wait(with: completeInvoked) {
-            return try await Amplify.Storage.list(options: options)
+    /// Given: A collection of objects in storage numbering `objectCount`.
+    /// When: The list API is invoked twice using a pageSize of `((objectCount/2) - 1)` and its
+    ///      corresponding token options.
+    /// Then: All objects are listed.
+    func testListTwoPages() async throws {
+        let objectCount = UInt.random(in: 16..<32)
+        // One more than half in order to ensure there are only two pages
+        let pageSize = UInt(objectCount/2) + 1
+        let path = "pagination-\(UUID().uuidString)"
+        for i in 0..<objectCount {
+            let key = "\(path)/\(i).txt"
+            let data = Data("\(i)".utf8)
+            await uploadData(key: key, data: data)
+            uploadedKeys.append(key)
         }
 
-        XCTAssertNotNil(result)
-        XCTAssertEqual(result?.items.count, 0)
+        // First half of listing
+        let firstResult = try await Amplify.Storage.list(options: .init(
+            accessLevel: .guest,
+            path: path,
+            pageSize: pageSize
+        ))
+        let firstPage = try XCTUnwrap(firstResult.items)
+        XCTAssertEqual(firstPage.count, Int(pageSize))
+        let firstNextToken = try XCTUnwrap(firstResult.nextToken)
+
+        // Second half of listing
+        let secondResult = try await Amplify.Storage.list(options: .init(
+            accessLevel: .guest,
+            path: path,
+            pageSize: pageSize,
+            nextToken: firstNextToken
+        ))
+        let secondPage = try XCTUnwrap(secondResult.items)
+        XCTAssertEqual(secondPage.count, Int(objectCount - pageSize))
+        XCTAssertNil(secondResult.nextToken)
+
+        XCTAssertEqual(
+            uploadedKeys.sorted(),
+            Array((firstPage + secondPage).map { $0.key }).sorted()
+        )
     }
 
     /// Given: No object in storage for the key
     /// When: Call the list API
     /// Then: The operation completes successfully with empty list of keys returned
-    func testListWithPathUsingFolderNameWithForwardSlash() async {
+    func testListEmpty() async throws {
+        let key = UUID().uuidString
+        let options = StorageListRequest.Options(accessLevel: .guest,
+                                                 targetIdentityId: nil,
+                                                 path: key)
+        let result = try await Amplify.Storage.list(options: options)
+
+        XCTAssertNotNil(result)
+        XCTAssertEqual(result.items.count, 0)
+    }
+
+    /// Given: No object in storage for the key
+    /// When: Call the list API
+    /// Then: The operation completes successfully with empty list of keys returned
+    func testListWithPathUsingFolderNameWithForwardSlash() async throws {
         let key = UUID().uuidString
         let folder = key + "/"
         var keys: [String] = []
@@ -277,18 +287,11 @@ class AWSS3StoragePluginBasicIntegrationTests: AWSS3StoragePluginTestBase {
             keys.append(key)
             await uploadData(key: key, dataString: key)
         }
-        let completeInvoked = asyncExpectation(description: "Completed is invoked")
         let options = StorageListRequest.Options(accessLevel: .guest,
                                                  targetIdentityId: nil,
                                                  path: folder)
-        let result = await wait(with: completeInvoked) {
-            return try await Amplify.Storage.list(options: options)
-        }
-
-        guard let items = result?.items else {
-            XCTFail("Failed to list items")
-            return
-        }
+        let result = try await Amplify.Storage.list(options: options)
+        let items = result.items
 
         XCTAssertEqual(items.count, keys.count)
         for item in items {
@@ -302,7 +305,7 @@ class AWSS3StoragePluginBasicIntegrationTests: AWSS3StoragePluginTestBase {
     /// Given: Objects with identifiers specified in `keys` array stored in folder named (`key1`+`key2`)
     /// When: Call the list API using the path `key1`
     /// Then: The operation completes successfully with list of keys returned from the folder.
-    func testListWithPathUsingIncompleteFolderName() async {
+    func testListWithPathUsingIncompleteFolderName() async throws {
         let key1 = UUID().uuidString + "testListWithPathUsingIncomp"
         let key2 = "leteFolderName"
         let folder = key1 + key2 + "/"
@@ -313,19 +316,12 @@ class AWSS3StoragePluginBasicIntegrationTests: AWSS3StoragePluginTestBase {
             await uploadData(key: key, dataString: key)
         }
 
-        let completeInvoked = asyncExpectation(description: "Completed is invoked")
         let options = StorageListRequest.Options(accessLevel: .guest,
                                                  targetIdentityId: nil,
                                                  path: key1)
-        let result = await wait(with: completeInvoked) {
-            return try await Amplify.Storage.list(options: options)
-        }
-
-        guard let items = result?.items else {
-            XCTFail("Failed to list items")
-            return
-        }
-
+        let result = try await Amplify.Storage.list(options: options)
+        let items = result.items
+        
         XCTAssertEqual(items.count, keys.count)
         for item in items {
             XCTAssertTrue(keys.contains(item.key), "The key that was uploaded should match the key listed")
@@ -342,28 +338,22 @@ class AWSS3StoragePluginBasicIntegrationTests: AWSS3StoragePluginTestBase {
     /// Given: An object in storage
     /// When: Call the remove API
     /// Then: The operation completes successfully with the key removed from storage
-    func testRemoveKey() async {
+    func testRemoveKey() async throws {
         let key = UUID().uuidString
         await uploadData(key: key, dataString: key)
 
-        let completeInvoked = asyncExpectation(description: "Completed is invoked")
-        let result = await wait(with: completeInvoked) {
-            return try await Amplify.Storage.remove(key: key, options: nil)
-        }
-        XCTAssertNotNil(result)
+        let result = try await Amplify.Storage.remove(key: key, options: nil)
+        XCTAssertEqual(result, key)
     }
 
     /// Given: Object with key `key` does not exist in storage
     /// When: Call the remove API
     /// Then: The operation completes successfully.
-    func testRemoveNonExistentKey() async {
+    func testRemoveNonExistentKey() async throws {
         let key = UUID().uuidString
 
-        let completeInvoked = asyncExpectation(description: "Completed is invoked")
-        let result = await wait(with: completeInvoked) {
-            return try await Amplify.Storage.remove(key: key, options: nil)
-        }
-        XCTAssertNotNil(result)
+        let result = try await Amplify.Storage.remove(key: key, options: nil)
+        XCTAssertEqual(result, key)
     }
 
 //    /// Given: Object with key `key` in storage
@@ -401,7 +391,7 @@ class AWSS3StoragePluginBasicIntegrationTests: AWSS3StoragePluginTestBase {
 //            XCTFail("Failed to get AWSS3StoragePlugin")
 //        }
 //    }
-
+    
     // MARK: Helper functions
 
     func removeIfExists(_ fileURL: URL) {
@@ -414,24 +404,11 @@ class AWSS3StoragePluginBasicIntegrationTests: AWSS3StoragePluginTestBase {
             }
         }
     }
+}
 
-    // Copied from accepted answer here:
-    // https://stackoverflow.com/questions/32163848/how-can-i-convert-a-string-to-an-md5-hash-in-ios-using-swift
-    func MD5(string: String) -> Data {
-        let length = Int(CC_MD5_DIGEST_LENGTH)
-        let messageData = string.data(using: .utf8)!
-        var digestData = Data(count: length)
-
-        _ = digestData.withUnsafeMutableBytes { digestBytes -> UInt8 in
-            messageData.withUnsafeBytes { messageBytes -> UInt8 in
-                if let messageBytesBaseAddress = messageBytes.baseAddress,
-                    let digestBytesBlindMemory = digestBytes.bindMemory(to: UInt8.self).baseAddress {
-                    let messageLength = CC_LONG(messageData.count)
-                    CC_MD5(messageBytesBaseAddress, messageLength, digestBytesBlindMemory)
-                }
-                return 0
-            }
-        }
-        return digestData
+private extension String {
+    func md5() -> String {
+        let digest = Insecure.MD5.hash(data: data(using: .utf8) ?? Data())
+        return digest.map { String(format: "%02hhx", $0) }.joined()
     }
 }

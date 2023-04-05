@@ -479,104 +479,95 @@ class DataStoreEndToEndTests: SyncEngineIntegrationTestBase {
         try await Amplify.DataStore.start()
     }
 
-    /// Perform concurrent saves and observe the data successfuly synced from cloud. Then delete the items afterwards
-    /// and ensure they have successfully synced from cloud
+    /// Create model instances for different models but same primary key value
     ///
-    /// - Given: DataStore is in ready state
-    /// - When:
-    ///    - Concurrently perform Save's
-    /// - Then:
-    ///    - Ensure the expected mutation event with version 1 (synced from cloud) is received
-    ///    - Clean up: Concurrently perform Delete's
-    ///    - Ensure the expected mutation event with version 2 (synced from cloud) is received
-    ///
-    func testConcurrentSave() async throws {
-        await setUp(withModels: TestModelRegistration(), logLevel: .verbose)
+    /// Given - DataStore with clean state
+    /// When
+    ///     - create post and comment with the same random id
+    /// Then
+    ///     - all instances should be created successfully with the same id
+    func testCreateModelInstances_withSamePrimaryKeyForDifferentModels_allSucceed() async throws {
+        await setUp(withModels: TestModelRegistration())
         try await startAmplifyAndWaitForSync()
 
-        var posts = [Post]()
-        let count = 2
-        for index in 0 ..< count {
-            let post = Post(title: "title \(index)",
-                            content: "content",
-                            createdAt: .now())
-            posts.append(post)
+        let uuid = UUID().uuidString
+        let newPost = Post(
+            id: uuid,
+            title: UUID().uuidString,
+            content: UUID().uuidString,
+            createdAt: .now()
+        )
+
+        let createdPost = try await Amplify.DataStore.save(newPost)
+        let newComment = Comment(
+            id: uuid,
+            content: UUID().uuidString,
+            createdAt: .now(),
+            post: newPost
+        )
+        let createdComment = try await Amplify.DataStore.save(newComment)
+
+        XCTAssertEqual(createdPost.id, createdComment.id)
+    }
+
+    ///
+    /// - Given: DataStore with clean state
+    /// - When:
+    ///     - do some mutaions to ensure MutationEventPublisher works fine
+    ///     - wait 1 second for OutgoingMutationQueue stateMachine transform to waitingForEventToProcess state
+    ///     - do some mutations in parallel
+    /// - Then: verify no mutaiton loss
+    func testParallelMutations_whenWaitingForEventToProcess_noMutationLoss() async throws {
+        await setUp(withModels: TestModelRegistration())
+        try await startAmplifyAndWaitForSync()
+
+        let parallelSize = 100
+        let initExpectation = asyncExpectation(description: "expect MutationEventPublisher works fine")
+        let parallelExpectation = asyncExpectation(description: "expect parallel processing no data loss")
+
+        let newPost = Post(title: UUID().uuidString, content: UUID().uuidString, createdAt: .now())
+
+        let titlePrefix = UUID().uuidString
+        let posts = (0..<parallelSize).map { Post(title: "\(titlePrefix)-\($0)", content: UUID().uuidString, createdAt: .now()) }
+        var expectedResult = Set<String>()
+        let extractPost: (DataStoreHubEvent) -> Post? = {
+            if case .outboxMutationProcessed(let mutationEvent) = $0,
+               mutationEvent.modelName == Post.modelName
+            {
+                return mutationEvent.element.model as? Post
+            }
+            return nil
         }
-        let postsSyncedToCloud = expectation(description: "All posts saved and synced to cloud")
-        postsSyncedToCloud.expectedFulfillmentCount = count
-        log.debug("Created posts: [\(posts.map { $0.identifier })]")
 
-        let postsCopy = posts
-        Task {
-            var postsSyncedToCloudCount = 0
-            let mutationEvents = Amplify.DataStore.observe(Post.self)
-            do {
-                for try await mutationEvent in mutationEvents {
-                    guard postsCopy.contains(where: { $0.id == mutationEvent.modelId }) else {
-                        return
-                    }
-
-                    if mutationEvent.mutationType == MutationEvent.MutationType.create.rawValue,
-                       mutationEvent.version == 1 {
-                        postsSyncedToCloudCount += 1
-                        self.log.debug("Post saved and synced from cloud \(mutationEvent.modelId) \(postsSyncedToCloudCount)")
-                        postsSyncedToCloud.fulfill()
-                    }
+        let cancellable = Amplify.Hub.publisher(for: .dataStore)
+            .filter { $0.eventName == HubPayload.EventName.DataStore.outboxMutationProcessed }
+            .map { DataStoreHubEvent(payload: $0) }
+            .compactMap(extractPost)
+            .sink { post in
+                if post.title == newPost.title {
+                    Task { await initExpectation.fulfill() }
                 }
-            } catch {
-                XCTFail("Failed \(error)")
-            }
-        }
 
-        let capturedPosts = posts
-
-        DispatchQueue.concurrentPerform(iterations: count) { index in
-            Task {
-                _ = try await Amplify.DataStore.save(capturedPosts[index])
-            }
-        }
-        await waitForExpectations(timeout: 100)
-
-        let postsDeletedLocally = expectation(description: "All posts deleted locally")
-        postsDeletedLocally.expectedFulfillmentCount = count
-
-        let postsDeletedFromCloud = expectation(description: "All posts deleted and synced to cloud")
-        postsDeletedFromCloud.expectedFulfillmentCount = count
-        
-        Task {
-            var postsDeletedFromCloudCount = 0
-            let mutationEvents = Amplify.DataStore.observe(Post.self)
-            do {
-                for try await mutationEvent in mutationEvents {
-                    guard capturedPosts.contains(where: { $0.id == mutationEvent.modelId }) else {
-                        return
-                    }
-
-                    if mutationEvent.mutationType == MutationEvent.MutationType.delete.rawValue,
-                              mutationEvent.version == 1 {
-                        self.log.debug(
-                            "Post deleted locally \(mutationEvent.modelId)")
-                        postsDeletedLocally.fulfill()
-                    } else if mutationEvent.mutationType == MutationEvent.MutationType.delete.rawValue,
-                              mutationEvent.version == 2 {
-                        postsDeletedFromCloudCount += 1
-                        self.log.debug(
-                            "Post deleted and synced from cloud \(mutationEvent.modelId) \(postsDeletedFromCloudCount)")
-                        postsDeletedFromCloud.fulfill()
-                    }
+                if post.title.hasPrefix(titlePrefix) {
+                    expectedResult.insert(post.title)
                 }
-            } catch {
-                XCTFail("Failed \(error)")
+
+                if expectedResult.count == parallelSize {
+                    Task { await parallelExpectation.fulfill() }
+                }
             }
-        }
-        
-        DispatchQueue.concurrentPerform(iterations: count) { index in
+        try await Amplify.DataStore.save(newPost)
+        await AsyncTesting.waitForExpectations([initExpectation], timeout: 10)
+        try await Task.sleep(seconds: 1)
+
+        for post in posts {
             Task {
-                try await Amplify.DataStore.delete(capturedPosts[index])
+                try? await Amplify.DataStore.save(post)
             }
         }
-        
-        await waitForExpectations(timeout: 100)
+        await AsyncTesting.waitForExpectations([parallelExpectation], timeout: Double(parallelSize))
+        cancellable.cancel()
+        XCTAssertEqual(expectedResult, Set(posts.map(\.title)))
     }
 
     // MARK: - Helpers

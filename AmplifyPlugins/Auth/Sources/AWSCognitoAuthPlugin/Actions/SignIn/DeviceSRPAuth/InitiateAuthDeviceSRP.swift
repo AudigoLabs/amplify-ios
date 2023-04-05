@@ -30,8 +30,12 @@ struct InitiateAuthDeviceSRP: Action {
 
             // Get device metadata
             let deviceMetadata = await DeviceMetadataHelper.getDeviceMetadata(
-                for: environment,
-                with: username)
+                for: username,
+                with: environment)
+
+            let asfDeviceId = try await CognitoUserPoolASF.asfDeviceID(
+                for: username,
+                credentialStoreClient: environment.authEnvironment().credentialsClient)
 
             let srpStateData = SRPStateData(
                 username: username,
@@ -39,13 +43,13 @@ struct InitiateAuthDeviceSRP: Action {
                 NHexValue: nHexValue,
                 gHexValue: gHexValue,
                 srpKeyPair: srpKeyPair,
-                deviceMetadata: deviceMetadata,
                 clientTimestamp: Date())
 
             let request = RespondToAuthChallengeInput.deviceSRP(
                 username: username,
                 environment: userPoolEnv,
                 deviceMetadata: deviceMetadata,
+                asfDeviceId: asfDeviceId,
                 session: authResponse.session,
                 publicHexValue: srpKeyPair.publicKeyHexValue)
 

@@ -81,15 +81,17 @@ public class AWSGraphQLSubscriptionTaskRunner<R: Decodable>: InternalTaskRunner,
         // Retrieve request plugin option and
         // auth type in case of a multi-auth setup
         let pluginOptions = request.options.pluginOptions as? AWSPluginOptions
+        let urlRequest = generateSubscriptionURLRequest(from: endpointConfig)
 
         // Retrieve the subscription connection
         subscriptionQueue.sync {
             do {
                 subscriptionConnection = try subscriptionConnectionFactory
                     .getOrCreateConnection(for: endpointConfig,
-                                              authService: authService,
-                                              authType: pluginOptions?.authType,
-                                              apiAuthProviderFactory: apiAuthProviderFactory)
+                                           urlRequest: urlRequest,
+                                           authService: authService,
+                                           authType: pluginOptions?.authType,
+                                           apiAuthProviderFactory: apiAuthProviderFactory)
             } catch {
                 let error = APIError.operationError("Unable to get connection for api \(endpointConfig.name)", "", error)
                 fail(error)
@@ -104,6 +106,14 @@ public class AWSGraphQLSubscriptionTaskRunner<R: Decodable>: InternalTaskRunner,
                 self?.onAsyncSubscriptionEvent(event: event)
             })
         }
+    }
+
+    private func generateSubscriptionURLRequest(
+        from endpointConfig: AWSAPICategoryPluginConfiguration.EndpointConfig
+    ) -> URLRequest {
+        var urlRequest = URLRequest(url: endpointConfig.baseURL)
+        urlRequest.setValue(AWSAPIPluginsCore.baseUserAgent(), forHTTPHeaderField: URLRequestConstants.Header.userAgent)
+        return urlRequest
     }
     
     // MARK: - Subscription callbacks
@@ -151,9 +161,10 @@ public class AWSGraphQLSubscriptionTaskRunner<R: Decodable>: InternalTaskRunner,
         } catch let error as APIError {
             fail(error)
         } catch {
-            // TODO: Verify with the team that terminating a subscription after failing to decode/cast one
+            // Verify with the team that terminating a subscription after failing to decode/cast one
             // payload is the right thing to do. Another option would be to propagate a GraphQL error, but
             // leave the subscription alive.
+            // see https://github.com/aws-amplify/amplify-swift/issues/2577
             
             fail(APIError.operationError("Failed to deserialize", "", error))
         }
@@ -185,7 +196,7 @@ public class AWSGraphQLSubscriptionTaskRunner<R: Decodable>: InternalTaskRunner,
     }
 }
 
-// TODO: Remove this code, it has replaced been with AWSGraphQLSubscriptionTaskRunner above.
+// Class is still necessary. See https://github.com/aws-amplify/amplify-swift/issues/2252
 final public class AWSGraphQLSubscriptionOperation<R: Decodable>: GraphQLSubscriptionOperation<R> {
 
     let pluginConfig: AWSAPICategoryPluginConfiguration
@@ -268,15 +279,17 @@ final public class AWSGraphQLSubscriptionOperation<R: Decodable>: GraphQLSubscri
         // Retrieve request plugin option and
         // auth type in case of a multi-auth setup
         let pluginOptions = request.options.pluginOptions as? AWSPluginOptions
+        let urlRequest = generateSubscriptionURLRequest(from: endpointConfig)
 
         // Retrieve the subscription connection
         subscriptionQueue.sync {
             do {
                 subscriptionConnection = try subscriptionConnectionFactory
                     .getOrCreateConnection(for: endpointConfig,
-                                              authService: authService,
-                                              authType: pluginOptions?.authType,
-                                              apiAuthProviderFactory: apiAuthProviderFactory)
+                                           urlRequest: urlRequest,
+                                           authService: authService,
+                                           authType: pluginOptions?.authType,
+                                           apiAuthProviderFactory: apiAuthProviderFactory)
             } catch {
                 let error = APIError.operationError("Unable to get connection for api \(endpointConfig.name)", "", error)
                 dispatch(result: .failure(error))
@@ -292,6 +305,14 @@ final public class AWSGraphQLSubscriptionOperation<R: Decodable>: GraphQLSubscri
                 self?.onAsyncSubscriptionEvent(event: event)
             })
         }
+    }
+
+    private func generateSubscriptionURLRequest(
+        from endpointConfig: AWSAPICategoryPluginConfiguration.EndpointConfig
+    ) -> URLRequest {
+        var urlRequest = URLRequest(url: endpointConfig.baseURL)
+        urlRequest.setValue(AWSAPIPluginsCore.baseUserAgent(), forHTTPHeaderField: URLRequestConstants.Header.userAgent)
+        return urlRequest
     }
 
     // MARK: - Subscription callbacks
@@ -342,9 +363,11 @@ final public class AWSGraphQLSubscriptionOperation<R: Decodable>: GraphQLSubscri
             dispatch(result: .failure(error))
             finish()
         } catch {
-            // TODO: Verify with the team that terminating a subscription after failing to decode/cast one
+            // Verify with the team that terminating a subscription after failing to decode/cast one
             // payload is the right thing to do. Another option would be to propagate a GraphQL error, but
             // leave the subscription alive.
+            // see https://github.com/aws-amplify/amplify-swift/issues/2577
+
             dispatch(result: .failure(APIError.operationError("Failed to deserialize", "", error)))
             finish()
         }

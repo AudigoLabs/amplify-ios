@@ -9,6 +9,7 @@ import XCTest
 import AWSPinpoint
 
 @testable import Amplify
+@_spi(InternalAWSPinpoint) @testable import InternalAWSPinpoint
 @testable import AWSPinpointAnalyticsPlugin
 import AWSCognitoAuthPlugin
 import Network
@@ -18,7 +19,7 @@ class AWSPinpointAnalyticsPluginIntergrationTests: XCTestCase {
 
     static let amplifyConfiguration = "testconfiguration/AWSPinpointAnalyticsPluginIntegrationTests-amplifyconfiguration"
     static let analyticsPluginKey = "awsPinpointAnalyticsPlugin"
-
+    
     override func setUp() {
         do {
             let config = try TestConfigHelper.retrieveAmplifyConfiguration(forResource: Self.amplifyConfiguration)
@@ -145,6 +146,8 @@ class AWSPinpointAnalyticsPluginIntergrationTests: XCTestCase {
         XCTAssertNotNil(awsPinpoint)
     }
 
+    
+    
     private func plugin() -> AWSPinpointAnalyticsPlugin {
         guard let plugin = try? Amplify.Analytics.getPlugin(for: "awsPinpointAnalyticsPlugin"),
               let analyticsPlugin = plugin as? AWSPinpointAnalyticsPlugin else {

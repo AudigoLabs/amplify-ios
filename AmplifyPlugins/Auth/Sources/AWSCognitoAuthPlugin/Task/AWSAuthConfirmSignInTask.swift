@@ -8,23 +8,39 @@ import Foundation
 import Amplify
 import AWSPluginsCore
 
-class AWSAuthConfirmSignInTask: AuthConfirmSignInTask {
+class AWSAuthConfirmSignInTask: AuthConfirmSignInTask, DefaultLogger {
 
     private let request: AuthConfirmSignInRequest
     private let authStateMachine: AuthStateMachine
     private let taskHelper: AWSAuthTaskHelper
+    private let authConfiguration: AuthConfiguration
 
     var eventName: HubPayloadEventName {
         HubPayload.EventName.Auth.confirmSignInAPI
     }
 
-    init(_ request: AuthConfirmSignInRequest, stateMachine: AuthStateMachine) {
+    init(_ request: AuthConfirmSignInRequest,
+         stateMachine: AuthStateMachine,
+         configuration: AuthConfiguration) {
         self.request = request
         self.authStateMachine = stateMachine
         self.taskHelper = AWSAuthTaskHelper(authStateMachine: authStateMachine)
+        self.authConfiguration = configuration
     }
 
     func execute() async throws -> AuthSignInResult {
+        log.verbose("Starting execution")
+        await taskHelper.didStateMachineConfigured()
+
+        //Check if we have a user pool configuration
+        guard authConfiguration.getUserPoolConfiguration() != nil else {
+            let message = AuthPluginErrorConstants.configurationError
+            let authError = AuthError.configuration(
+                "Could not find user pool configuration",
+                message)
+            throw authError
+        }
+
         if let validationError = request.hasError() {
             throw validationError
         }
@@ -32,16 +48,22 @@ class AWSAuthConfirmSignInTask: AuthConfirmSignInTask {
             "User is not attempting signIn operation",
             AuthPluginErrorConstants.invalidStateError, nil)
 
-        await taskHelper.didStateMachineConfigured()
+        guard case .configured(let authNState, _) = await authStateMachine.currentState,
+              case .signingIn(let signInState) = authNState,
+              case .resolvingChallenge(let challengeState, _, _) = signInState else {
+            throw invalidStateError
+        }
 
-        if case .configured(let authNState, _) = await authStateMachine.currentState,
-           case .signingIn(let signInState) = authNState,
-           case .resolvingChallenge(let challengeState, _, _) = signInState,
-           case .waitingForAnswer = challengeState {
+        switch challengeState {
+        case .waitingForAnswer, .error:
+            log.verbose("Sending confirm signIn event: \(challengeState)")
             await sendConfirmSignInEvent()
+        default:
+            throw invalidStateError
         }
 
         let stateSequences = await authStateMachine.listen()
+        log.verbose("Waiting for response")
         for await state in stateSequences {
                guard case .configured(let authNState, let authZState) = state else {
                    continue
@@ -50,38 +72,17 @@ class AWSAuthConfirmSignInTask: AuthConfirmSignInTask {
                case .signedIn:
                    if case .sessionEstablished = authZState {
                        return AuthSignInResult(nextStep: .done)
+                   } else {
+                       log.verbose("Signed In, waiting for authorization to complete")
                    }
                case .error(let error):
                    throw AuthError.unknown("Sign in reached an error state", error)
 
                case .signingIn(let signInState):
-                   if case .resolvingChallenge(let challengeState, _, _) = signInState,
-                      case .error(_, let signInError) = challengeState {
-                       let authError = signInError.authError
-                       if case .service(_, _, let serviceError) = authError,
-                          let cognitoError = serviceError as? AWSCognitoAuthError,
-                          case .passwordResetRequired = cognitoError {
-                           return AuthSignInResult(nextStep: .resetPassword(nil))
-
-                       } else if case .service(_, _, let serviceError) = authError,
-                                 let cognitoError = serviceError as? AWSCognitoAuthError,
-                                 case .userNotConfirmed = cognitoError {
-                           return AuthSignInResult(nextStep: .confirmSignUp(nil))
-                       } else {
-                           throw authError
-                       }
-                   } else if case .resolvingChallenge(let challengeState, _, _) = signInState {
-                       switch challengeState {
-                       case .waitingForAnswer:
-                           guard let result = try UserPoolSignInHelper.checkNextStep(signInState) else {
-                               continue
-                           }
-                           return result
-
-                       default:
-                           continue
-                       }
+                   guard let result = try UserPoolSignInHelper.checkNextStep(signInState) else {
+                       continue
                    }
+                   return result
                case .notConfigured:
                    throw AuthError.configuration(
                     "UserPool configuration is missing",

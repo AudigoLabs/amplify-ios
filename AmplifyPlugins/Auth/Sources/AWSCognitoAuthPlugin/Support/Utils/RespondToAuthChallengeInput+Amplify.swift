@@ -15,6 +15,8 @@ extension RespondToAuthChallengeInput {
                                  session: String?,
                                  secretBlock: String,
                                  signature: String,
+                                 deviceMetadata: DeviceMetadata,
+                                 asfDeviceId: String?,
                                  environment: UserPoolEnvironment) -> RespondToAuthChallengeInput {
         let dateStr = stateData.clientTimestamp.utcString
         let challengeResponses = [
@@ -28,13 +30,15 @@ extension RespondToAuthChallengeInput {
             challengeResponses: challengeResponses,
             session: session,
             clientMetadata: [:],
-            deviceMetadata: stateData.deviceMetadata,
+            asfDeviceId: asfDeviceId,
+            deviceMetadata: deviceMetadata,
             environment: environment)
     }
 
     static func deviceSRP(username: String,
                           environment: UserPoolEnvironment,
                           deviceMetadata: DeviceMetadata,
+                          asfDeviceId: String?,
                           session: String?,
                           publicHexValue: String) -> RespondToAuthChallengeInput {
         let challengeResponses = [
@@ -47,6 +51,7 @@ extension RespondToAuthChallengeInput {
             challengeResponses: challengeResponses,
             session: session,
             clientMetadata: [:],
+            asfDeviceId: asfDeviceId,
             deviceMetadata: deviceMetadata,
             environment: environment)
     }
@@ -56,6 +61,8 @@ extension RespondToAuthChallengeInput {
                                        session: String?,
                                        secretBlock: String,
                                        signature: String,
+                                       deviceMetadata: DeviceMetadata,
+                                       asfDeviceId: String?,
                                        environment: UserPoolEnvironment)
     -> RespondToAuthChallengeInput {
         let dateStr = stateData.clientTimestamp.utcString
@@ -70,7 +77,8 @@ extension RespondToAuthChallengeInput {
             challengeResponses: challengeResponses,
             session: session,
             clientMetadata: [:],
-            deviceMetadata: stateData.deviceMetadata,
+            asfDeviceId: asfDeviceId,
+            deviceMetadata: deviceMetadata,
             environment: environment)
     }
 
@@ -81,7 +89,9 @@ extension RespondToAuthChallengeInput {
         responseKey: String,
         answer: String,
         clientMetadata: [String: String]?,
+        asfDeviceId: String?,
         attributes: [String: String],
+        deviceMetadata: DeviceMetadata,
         environment: UserPoolEnvironment) -> RespondToAuthChallengeInput {
 
             var challengeResponses = [
@@ -99,7 +109,8 @@ extension RespondToAuthChallengeInput {
                 challengeResponses: challengeResponses,
                 session: session,
                 clientMetadata: clientMetadata ?? [:],
-                deviceMetadata: .noData,
+                asfDeviceId: asfDeviceId,
+                deviceMetadata: deviceMetadata,
                 environment: environment)
         }
 
@@ -109,7 +120,7 @@ extension RespondToAuthChallengeInput {
         challengeResponses: [String: String],
         session: String?,
         clientMetadata: [String: String],
-        asfDeviceId: String? = nil,
+        asfDeviceId: String?,
         deviceMetadata: DeviceMetadata,
         environment: UserPoolEnvironment) -> RespondToAuthChallengeInput {
             var challengeResponses = challengeResponses

@@ -25,22 +25,29 @@ struct VerifyPasswordSRP: Action {
                  environment: Environment) async {
 
         logVerbose("\(#fileID) Starting execution", environment: environment)
-
+        let inputUsername = stateData.username
+        var username = inputUsername
+        var deviceMetadata = DeviceMetadata.noData
         do {
             let srpEnv = try environment.srpEnvironment()
             let userPoolEnv = try environment.userPoolEnvironment()
             let srpClient = try SRPSignInHelper.srpClient(srpEnv)
             let parameters = try challengeParameters()
 
-            let inputUsername = stateData.username
-            let username = parameters["USERNAME"] ?? inputUsername
+            username = parameters["USERNAME"] ?? inputUsername
             let userIdForSRP = parameters["USER_ID_FOR_SRP"] ?? inputUsername
-
             let saltHex = try saltHex(parameters)
             let secretBlockString = try secretBlockString(parameters)
             let secretBlock = try secretBlock(secretBlockString)
             let serverPublicB = try serverPublic(parameters)
 
+            let asfDeviceId = try await CognitoUserPoolASF.asfDeviceID(
+                for: username,
+                credentialStoreClient: environment.authEnvironment().credentialsClient)
+
+            deviceMetadata = await DeviceMetadataHelper.getDeviceMetadata(
+                for: username,
+                with: environment)
             let signature = try signature(userIdForSRP: userIdForSRP,
                                           saltHex: saltHex,
                                           secretBlock: secretBlock,
@@ -53,6 +60,8 @@ struct VerifyPasswordSRP: Action {
                 session: authResponse.session,
                 secretBlock: secretBlockString,
                 signature: signature,
+                deviceMetadata: deviceMetadata,
+                asfDeviceId: asfDeviceId,
                 environment: userPoolEnv)
             let responseEvent = try await UserPoolSignInHelper.sendRespondToAuth(
                 request: request,
@@ -67,6 +76,16 @@ struct VerifyPasswordSRP: Action {
             let event = SignInEvent(
                 eventType: .throwPasswordVerifierError(error)
             )
+            logVerbose("\(#fileID) Sending event \(event)",
+                       environment: environment)
+            await dispatcher.send(event)
+        } catch let error where deviceNotFound(error: error, deviceMetadata: deviceMetadata) {
+            logVerbose("\(#fileID) Received device not found \(error)", environment: environment)
+            // Remove the saved device details and retry password verify
+            await DeviceMetadataHelper.removeDeviceMetaData(for: username, with: environment)
+            let event = SignInEvent(eventType: .retryRespondPasswordVerifier(stateData, authResponse))
+            logVerbose("\(#fileID) Sending event \(event)",
+                       environment: environment)
             await dispatcher.send(event)
         } catch {
             logVerbose("\(#fileID) SRPSignInError Generic \(error)", environment: environment)
@@ -74,8 +93,24 @@ struct VerifyPasswordSRP: Action {
             let event = SignInEvent(
                 eventType: .throwAuthError(authError)
             )
+            logVerbose("\(#fileID) Sending event \(event)",
+                       environment: environment)
             await dispatcher.send(event)
         }
+    }
+
+    func deviceNotFound(error: Error, deviceMetadata: DeviceMetadata) -> Bool {
+
+        // If deviceMetadata was not send, the error returned is not from device not found.
+        if case .noData = deviceMetadata {
+            return false
+        }
+
+        if let serviceError: RespondToAuthChallengeOutputError = error.internalAWSServiceError(),
+           case .resourceNotFoundException = serviceError {
+            return true
+        }
+        return false
     }
 }
 
